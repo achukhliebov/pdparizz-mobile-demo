@@ -211,6 +211,15 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .event-row { padding: 11px 0; border-bottom: 1px solid var(--line); }
 .event-row:last-child { border-bottom: 0; }
 .event-row time { color: var(--muted); font-size: 10px; }
+.onboarding-art { height: 330px; margin: -18px -18px 28px; border-radius: 0 0 36px 36px; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.7), transparent 25%), linear-gradient(145deg,#ead9dc,#b86f7b); color:#fff; font: 150px Georgia,serif; position:relative; overflow:hidden; }
+.onboarding-art::after { content:"PdParizz"; position:absolute; bottom:28px; font: 18px Georgia,serif; letter-spacing:.08em; }
+.progress-dots { display:flex; gap:7px; margin:18px 0; }
+.progress-dot { width:7px; height:7px; border-radius:50%; background:#d0c9bf; }
+.progress-dot.active { width:24px; border-radius:99px; background:var(--rose); }
+.quiz-progress { height:5px; border-radius:99px; background:#e6dfd5; overflow:hidden; margin-bottom:28px; }
+.quiz-progress span { display:block; height:100%; background:var(--rose); transition:width .25s ease; }
+.quiz-choice { width:100%; text-align:left; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.promo-strip { width:100%; border:0; text-align:left; margin:0 0 20px; background:#24201d; color:#fff; }
 .promo-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
 .promo-row button { border: 0; border-radius: 10px; padding: 9px 11px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 750; }
 .choice-card { width: 100%; text-align: left; margin-bottom: 10px; }
@@ -301,6 +310,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
     </main>
     <script type="module">
 const scenarios = [
+  ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
   ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
@@ -348,6 +358,11 @@ const defaultState = {
   referralRewardPending: false,
   referralRewardClaimed: false,
   analyticsEvents: [],
+  onboardingStep: 0,
+  onboardingCompleted: false,
+  quizStep: 0,
+  quizAnswers: {},
+  quizResultIds: ["lv-pacific", "hayati", "creed-aventus"],
   selectedProductId: "hayati",
   catalogFilter: "Все",
   profile: { name: "Артур", phone: "+7 999 123-45-67", email: "artur@example.test" },
@@ -370,6 +385,7 @@ if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoritePr
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
+if (params.get("welcome") === "1" || (params.get("source") === "installed" && !prototypeState.onboardingCompleted)) screen = "onboarding";
 const deepLinkProduct = params.get("product");
 if (deepLinkProduct && products.some((item) => item.id === deepLinkProduct)) {
   prototypeState.selectedProductId = deepLinkProduct;
@@ -397,11 +413,30 @@ const eventLabels = {
   screen_view: "Открыт экран", product_view: "Открыт товар", favorite_toggle: "Изменено избранное",
   add_to_cart: "Добавлено в корзину", checkout_started: "Начато оформление", order_completed: "Оформлен заказ",
   login: "Вход выполнен", referral_reward: "Реферальный бонус", push_changed: "Настройка push",
-  subscription_changed: "Изменена подписка", wheel_reward: "Получен подарок", install_requested: "Запрошена установка"
+  subscription_changed: "Изменена подписка", wheel_reward: "Получен подарок", install_requested: "Запрошена установка",
+  onboarding_step: "Шаг onboarding", quiz_answer: "Ответ подбора", quiz_completed: "Подбор завершён",
+  promo_opened: "Открыто промо", reorder_started: "Повторная покупка"
 };
 const track = (name, data = {}) => {
   prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
   prototypeState.analyticsEvents = prototypeState.analyticsEvents.slice(0, 50);
+};
+const onboardingSlides = [
+  { symbol: "P", eyebrow: "Добро пожаловать", title: "Ароматы, которые хочется носить", body: "Реальные позиции PdParizz, избранное и быстрый заказ — в одном месте." },
+  { symbol: "◇", eyebrow: "Персональный выбор", title: "Найдём аромат под настроение", body: "Ответьте на три коротких вопроса и получите персональную подборку." },
+  { symbol: "+", eyebrow: "PdParizz Club", title: "Баллы за покупки и приглашения", body: "Копите баллы, получайте ежедневные подарки и возвращайтесь за любимым ароматом." }
+];
+const quizQuestions = [
+  { key: "mood", eyebrow: "Вопрос 1 из 3", title: "Какое настроение хочется создать?", options: [["fresh","Свежесть и лёгкость","Воздух, вода и прохлада"],["bright","Яркость и энергия","Заметный аромат на весь день"],["cozy","Тепло и уют","Мягкий, сладкий шлейф"]] },
+  { key: "notes", eyebrow: "Вопрос 2 из 3", title: "Какие ноты вам ближе?", options: [["citrus","Цитрусы и зелень","Мята, бергамот, грейпфрут"],["flowers","Цветы и ваниль","Жасмин, тубероза, ваниль"],["wood","Дерево и специи","Кедр, кожа, корица"]] },
+  { key: "style", eyebrow: "Вопрос 3 из 3", title: "Какой характер аромата выбрать?", options: [["soft","Мягкий","Деликатный и универсальный"],["statement","Выразительный","Для уверенного появления"],["unisex","Вне категорий","Можно делиться с близкими"]] }
+];
+const quizRecommendations = () => {
+  const { mood, notes, style } = prototypeState.quizAnswers;
+  if (notes === "flowers") return ["armani-my-way", "dior-jadore", "aldebaran"];
+  if (notes === "wood" || style === "statement") return ["creed-aventus", "chanel-sport", "paco-million"];
+  if (mood === "cozy") return ["hayati", "mango-skin", "armani-my-way"];
+  return ["lv-pacific", "lacoste-blanc", "mango-skin"];
 };
 const saveState = () => {
   const { history, ...persisted } = prototypeState;
@@ -427,11 +462,18 @@ const productCard = (item) => `<article class="product-card" data-screen="produc
   <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><div class="price">${rub(item.price)}</div></div>
 </article>`;
 
+const onboarding = () => { const step = Math.min(prototypeState.onboardingStep, onboardingSlides.length - 1); const slide = onboardingSlides[step]; return `<section class="screen with-action"><div class="onboarding-art">${slide.symbol}</div><p class="eyebrow">${slide.eyebrow}</p><h1 style="font-size:38px;max-width:330px">${slide.title}</h1><p class="subtle" style="font-size:15px;margin:16px 0 0;max-width:330px">${slide.body}</p><div class="progress-dots">${onboardingSlides.map((_, index) => `<span class="progress-dot ${index === step ? "active" : ""}"></span>`).join("")}</div><button class="chip" data-action="onboarding-skip">Пропустить</button><div class="fixed-action"><button class="primary rose" data-action="onboarding-next">${step === onboardingSlides.length - 1 ? "Подобрать аромат" : "Продолжить"}</button></div></section>`; };
+
+const quiz = () => { const step = Math.min(prototypeState.quizStep, quizQuestions.length - 1); const question = quizQuestions[step]; return `<section class="screen"><div class="topline"><button class="back-btn" data-action="quiz-back">‹</button><p class="eyebrow">Персональный подбор</p><button class="chip" data-action="quiz-reset">Сначала</button></div><div class="quiz-progress"><span style="width:${((step + 1) / quizQuestions.length) * 100}%"></span></div><p class="eyebrow">${question.eyebrow}</p><h1 style="font-size:38px;margin-bottom:28px">${question.title}</h1>${question.options.map(([value,title,body]) => `<button class="card quiz-choice" data-action="quiz-answer" data-key="${question.key}" data-value="${value}"><div><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div><strong>›</strong></button>`).join("")}<p class="subtle" style="margin-top:18px">Подбор работает локально и не требует регистрации.</p></section>`; };
+
+const quizResult = () => { const recommended = prototypeState.quizResultIds.map(productById); return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ваш результат</p><button class="chip" data-action="quiz-reset">Пройти снова</button></div><h1 style="font-size:38px">Нашли вашу ароматную тройку</h1><p class="subtle" style="margin:14px 0 24px">Подборка собрана по настроению, любимым нотам и желаемому характеру.</p><div class="product-grid">${recommended.map(productCard).join("")}</div><div class="fixed-action"><button class="primary rose" data-action="quiz-add-all">Добавить три пробника · ${rub(recommended.reduce((sum,item) => sum + item.price, 0))}</button></div></section>`; };
+
 const catalog = () => `<section class="screen">
   <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇${cartItemCount() ? `<small>${cartItemCount()}</small>` : ""}</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌</button></div></div>
   <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
-  <article class="hero"><p class="eyebrow">Новая коллекция</p><h2>Ароматы для тёплого вечера</h2><p>Мягкие древесные и цветочные ноты</p></article>
+  <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
+  <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#d9b46a">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfc7bf;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
   <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
   <div class="product-grid">${products.map(productCard).join("")}</div>
   ${bottomNav("catalog")}
@@ -497,7 +539,7 @@ const paymentError = () => `<section class="screen"><div class="topline"><button
 const orderDelivered = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Доставлен</span></div>
   <div class="card loyalty-toggle"><div class="row"><span class="coin">P</span><div><h3>+199 баллов начислено</h3><p class="subtle" style="margin:0">За доставленный заказ</p></div></div></div>
   <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Заказ собран</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item done"><h3>Передан в доставку</h3><p class="subtle">5 августа, 09:30</p></div><div class="timeline-item done"><h3>Заказ доставлен</h3><p class="subtle">6 августа, 17:42</p></div></div>
-  <button class="primary">Повторить заказ</button></section>`;
+  <button class="primary" data-action="reorder">Повторить заказ</button></section>`;
 
 const loyalty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Программа лояльности</p><h1>Мои баллы</h1></div><button class="icon-btn">?</button></div>
   <div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">PdParizz Club</p><div class="balance">${new Intl.NumberFormat("ru-RU").format(prototypeState.points)} <small>баллов</small></div><p class="subtle" style="color:#d7d0c8">До 30% стоимости заказа</p></div>
@@ -538,7 +580,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { catalog, product, cart, favorites, checkout, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, cart, favorites, checkout, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -585,6 +627,74 @@ document.addEventListener("click", async (event) => {
   if (action === "back" || event.target.closest(".back-btn")) {
     event.preventDefault();
     goBack();
+    return;
+  }
+  if (action === "onboarding-next") {
+    track("onboarding_step", { step: prototypeState.onboardingStep + 1 });
+    if (prototypeState.onboardingStep < onboardingSlides.length - 1) {
+      prototypeState.onboardingStep += 1;
+      render("onboarding", { remember: false });
+    } else {
+      prototypeState.onboardingCompleted = true;
+      prototypeState.quizStep = 0;
+      prototypeState.quizAnswers = {};
+      render("quiz");
+    }
+    return;
+  }
+  if (action === "onboarding-skip") {
+    prototypeState.onboardingCompleted = true;
+    track("onboarding_step", { step: "skipped" });
+    render("catalog");
+    return;
+  }
+  if (action === "promo-quiz") {
+    prototypeState.quizStep = 0;
+    prototypeState.quizAnswers = {};
+    track("promo_opened", { promo: "fragrance_quiz" });
+    render("quiz");
+    return;
+  }
+  if (action === "quiz-back") {
+    if (prototypeState.quizStep > 0) {
+      prototypeState.quizStep -= 1;
+      render("quiz", { remember: false });
+    } else goBack();
+    return;
+  }
+  if (action === "quiz-reset") {
+    prototypeState.quizStep = 0;
+    prototypeState.quizAnswers = {};
+    render("quiz", { remember: false });
+    toast("Подбор начат заново");
+    return;
+  }
+  if (action === "quiz-answer") {
+    prototypeState.quizAnswers = { ...prototypeState.quizAnswers, [actionTarget.dataset.key]: actionTarget.dataset.value };
+    track("quiz_answer", { question: actionTarget.dataset.key, answer: actionTarget.dataset.value });
+    if (prototypeState.quizStep < quizQuestions.length - 1) {
+      prototypeState.quizStep += 1;
+      render("quiz", { remember: false });
+    } else {
+      prototypeState.quizResultIds = quizRecommendations();
+      track("quiz_completed", { products: prototypeState.quizResultIds.join(",") });
+      render("quiz-result");
+    }
+    return;
+  }
+  if (action === "quiz-add-all") {
+    prototypeState.quizResultIds.forEach((id) => { prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1; });
+    track("add_to_cart", { product: "quiz_bundle", count: prototypeState.quizResultIds.length });
+    render("cart");
+    toast("Три аромата добавлены в корзину");
+    return;
+  }
+  if (action === "reorder") {
+    prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty]));
+    prototypeState.promoApplied = false;
+    track("reorder_started", { order: "SIM-00001", items: cartItemCount() });
+    render("cart");
+    toast("Предыдущий заказ добавлен в корзину");
     return;
   }
   if (action === "favorite") {
