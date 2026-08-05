@@ -308,18 +308,36 @@ const products = [
   { id: "mango-skin", name: "Vilhelm Parfumerie Mango skin", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/15395726/zt9n5c72pj8twsbph9vjsggwxdcjxpqp/x640", sourceUrl: "https://pdparizz.biz/products/vilhelm-parfumerie-mango-skin-2-101420", notes: ["Манго", "Смородина", "Мускус"], description: "Спелое манго и чёрная смородина в сочной, яркой композиции с чистым мускусным шлейфом." }
 ];
 
-const prototypeState = {
-  cartQty: 0,
-  favorite: false,
+const storageKey = "pdparizz-mvp-state-v3";
+const defaultState = {
+  cartItems: {},
+  favoriteProductIds: ["hayati", "creed-aventus"],
   usePoints: true,
   points: 500,
   subscription: false,
   selectedProductId: "hayati",
-  history: [],
+  catalogFilter: "Все",
+  lastOrder: [{ id: "hayati", qty: 1 }],
+  lastOrderTotal: 75410,
 };
-const selectedProduct = () => products.find((item) => item.id === prototypeState.selectedProductId) || products[0];
+let storedState = {};
+try { storedState = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch {}
+const prototypeState = { ...defaultState, ...storedState, history: [] };
+if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) prototypeState.cartItems = {};
+if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
+const productById = (id) => products.find((item) => item.id === id) || products[0];
+const selectedProduct = () => productById(prototypeState.selectedProductId);
+const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => ({ item: productById(id), qty: Number(qty) || 0 })).filter(({ qty }) => qty > 0);
+const cartItemCount = () => cartEntries().reduce((sum, entry) => sum + entry.qty, 0);
+const cartGoodsMinor = () => cartEntries().reduce((sum, { item, qty }) => sum + item.price * qty, 0);
+const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
+const saveState = () => {
+  const { history, ...persisted } = prototypeState;
+  try { localStorage.setItem(storageKey, JSON.stringify(persisted)); } catch {}
+};
 const orderTotalMinor = () => {
-  const goods = selectedProduct().price * Math.max(prototypeState.cartQty, 1);
+  const goods = cartGoodsMinor();
+  if (!goods) return 0;
   const promo = Math.round(goods * 0.1);
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   return goods - promo - points + 35000;
@@ -332,15 +350,15 @@ const bottomNav = (active) => `<nav class="bottom-nav">
     `<a class="nav-item ${active === id ? "active" : ""}" href="?screen=${id}"><b>${icon}</b><span>${label}</span></a>`).join("")}
 </nav>`;
 
-const productCard = (item) => `<article class="product-card" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()}">
-  <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="heart" data-action="favorite" aria-label="В избранное">${prototypeState.favorite ? "♥" : "♡"}</button></div>
+const productCard = (item) => `<article class="product-card" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()} ${item.notes.join(" ").toLowerCase()}" data-product-category="${item.category}">
+  <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
   <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><div class="price">${rub(item.price)}</div></div>
 </article>`;
 
 const catalog = () => `<section class="screen">
-  <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌</button></div></div>
+  <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇${cartItemCount() ? `<small>${cartItemCount()}</small>` : ""}</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌</button></div></div>
   <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
-  <div class="chips"><button class="chip active">Все</button><button class="chip">Женские</button><button class="chip">Мужские</button><button class="chip">Унисекс</button></div>
+  <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <article class="hero"><p class="eyebrow">Новая коллекция</p><h2>Ароматы для тёплого вечера</h2><p>Мягкие древесные и цветочные ноты</p></article>
   <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
   <div class="product-grid">${products.map(productCard).join("")}</div>
@@ -348,7 +366,7 @@ const catalog = () => `<section class="screen">
 </section>`;
 
 const product = () => { const item = selectedProduct(); return `<section class="screen with-action">
-  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite">${prototypeState.favorite ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, 15 мл" referrerpolicy="no-referrer" /></div>
+  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, 15 мл" referrerpolicy="no-referrer" /></div>
   <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between"><h1>${item.name}</h1><strong>${rub(item.price)}</strong></div>
   <p class="subtle">Парфюмерная вода · 15 мл · <s>${rub(item.oldPrice)}</s></p><p class="rating">★★★★★ <span class="subtle">Актуальный товар</span></p>
   <div class="notes">${item.notes.map((note, index) => `<div class="note"><b>${note}</b><span>${["верхние ноты", "сердце", "база"][index]}</span></div>`).join("")}</div>
@@ -357,16 +375,16 @@ const product = () => { const item = selectedProduct(); return `<section class="
 </section>`; };
 
 const cart = () => {
-  if (prototypeState.cartQty < 1) return cartEmpty();
-  const item = selectedProduct();
-  const goods = item.price * prototypeState.cartQty;
+  const entries = cartEntries();
+  if (!entries.length) return cartEmpty();
+  const goods = cartGoodsMinor();
   const promo = Math.round(goods * 0.1);
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
-    <div class="card"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease">−</button><strong>${prototypeState.cartQty}</strong><button data-action="increase">+</button></div></div><strong>${rub(goods)}</strong></div></div>
-    <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать 500 баллов</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
+    ${entries.map(({ item, qty }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease" data-product-id="${item.id}" aria-label="Уменьшить ${item.name}">−</button><strong>${qty}</strong><button data-action="increase" data-product-id="${item.id}" aria-label="Увеличить ${item.name}">+</button></div></div><strong>${rub(item.price * qty)}</strong></div></div>`).join("")}
+    <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать доступные баллы</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
     <div class="field" style="margin-top:12px"><label>Промокод</label><strong>WELCOME10</strong></div>
     <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>−${rub(promo)}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(35000)}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
     <div class="fixed-action"><button class="primary" data-screen="checkout">Перейти к оформлению</button></div>
@@ -375,7 +393,7 @@ const cart = () => {
 
 const cartEmpty = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Корзина</h1><span></span></div><div class="state-panel"><div><div class="state-icon">◇</div><h2>Корзина пока пуста</h2><p class="subtle">Соберите свою коллекцию ароматов — выбранные товары сохранятся здесь.</p><button class="primary" style="padding:0 28px;width:auto">Перейти в каталог</button></div></div>${bottomNav("catalog")}</section>`;
 
-const favorites = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div><span class="subtle">2 товара</span></div><div class="product-grid">${productCard(products[0])}${productCard(products[4])}</div>${bottomNav("profile")}</section>`;
+const favorites = () => { const items = products.filter((item) => isFavorite(item.id)); return items.length ? `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div><span class="subtle">${items.length} товара</span></div><div class="product-grid">${items.map(productCard).join("")}</div>${bottomNav("profile")}</section>` : favoritesEmpty(); };
 
 const favoritesEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div></div><div class="state-panel"><div><div class="state-icon">♡</div><h2>Сохраняйте любимое</h2><p class="subtle">Нажмите на сердце в карточке аромата — он появится здесь.</p><button class="primary" style="padding:0 28px;width:auto">Найти аромат</button></div></div>${bottomNav("profile")}</section>`;
 
@@ -388,16 +406,16 @@ const checkout = () => `<section class="screen with-action">
   <div class="fixed-action"><button class="primary rose" data-action="pay">Оплатить ${rub(orderTotalMinor())}</button></div>
 </section>`;
 
-const orders = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
-  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">Сегодня · 1 товар</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px">${bottle}</div></div><strong>${rub(orderTotalMinor())} ›</strong></div></article>
+const orders = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const count = entries.reduce((sum, entry) => sum + entry.qty, 0); const first = productById(entries[0]?.id); return `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
+  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">Сегодня · ${count} ${count === 1 ? "товар" : "товара"}</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px"><img src="${first.image}" alt="${first.name}" referrerpolicy="no-referrer" /></div></div><strong>${rub(prototypeState.lastOrderTotal || defaultState.lastOrderTotal)} ›</strong></div></article>
   <article class="card order-card" data-screen="order-delivered"><div class="row between"><span class="order-number">SIM-00000</span><span class="status">Доставлен</span></div><p class="subtle">17 июля · 1 товар</p><div class="row between"><div class="thumb" style="width:48px;height:56px">${bottle}</div><strong>${rub(229000)} ›</strong></div></article>
-  ${bottomNav("orders")}</section>`;
+  ${bottomNav("orders")}</section>`; };
 
-const order = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
+const order = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; return `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
   <div class="card"><div class="row between"><span class="subtle">Ожидаемая доставка</span><strong>6 августа</strong></div></div>
   <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Собираем заказ</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item"><h3>Передадим в доставку</h3><p class="subtle">Ожидается завтра</p></div><div class="timeline-item"><h3>Заказ доставлен</h3></div></div>
-  <div class="card"><div class="cart-line" style="padding-top:0"><div class="thumb"><img src="${selectedProduct().image}" alt="${selectedProduct().name}" referrerpolicy="no-referrer" /></div><div><h3>${selectedProduct().name}</h3><p class="subtle">1 × ${rub(selectedProduct().price)}</p></div><strong>${rub(selectedProduct().price)}</strong></div><div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(orderTotalMinor())}</span></div></div></div>
-</section>`;
+  <div class="card">${entries.map(({ id, qty }) => { const item = productById(id); return `<div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${qty} × ${rub(item.price)}</p></div><strong>${rub(item.price * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(prototypeState.lastOrderTotal || defaultState.lastOrderTotal)}</span></div></div></div>
+</section>`; };
 
 const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
 
@@ -454,6 +472,8 @@ function render(next = screen, { remember = true } = {}) {
   app.scrollTop = 0;
   scenarioLabel.textContent = `390 × 844 · ${screen} · интерактивный режим`;
   auditNav.innerHTML = scenarios.map(([id, label]) => `<a class="${id === screen ? "active" : ""}" href="?screen=${id}" data-screen="${id}">${label}</a>`).join("");
+  if (screen === "catalog") applyCatalogFilters();
+  saveState();
 }
 
 function goBack() {
@@ -469,6 +489,15 @@ function toast(message) {
   setTimeout(() => element.remove(), 1800);
 }
 
+function applyCatalogFilters() {
+  const query = (document.querySelector("#catalog-search")?.value || "").trim().toLowerCase();
+  document.querySelectorAll(".product-card").forEach((card) => {
+    const matchesText = !query || card.dataset.productName.includes(query);
+    const matchesCategory = prototypeState.catalogFilter === "Все" || card.dataset.productCategory === prototypeState.catalogFilter;
+    card.hidden = !(matchesText && matchesCategory);
+  });
+}
+
 document.addEventListener("click", async (event) => {
   const actionTarget = event.target.closest("[data-action]");
   const action = actionTarget?.dataset.action;
@@ -481,20 +510,37 @@ document.addEventListener("click", async (event) => {
   if (action === "favorite") {
     event.preventDefault();
     event.stopPropagation();
-    prototypeState.favorite = !prototypeState.favorite;
-    document.querySelectorAll(".heart").forEach((heart) => { heart.textContent = prototypeState.favorite ? "♥" : "♡"; });
-    toast(prototypeState.favorite ? "Аромат сохранён в избранном" : "Аромат удалён из избранного");
+    const id = actionTarget.dataset.productId || prototypeState.selectedProductId;
+    prototypeState.selectedProductId = id;
+    const favorite = isFavorite(id);
+    prototypeState.favoriteProductIds = favorite ? prototypeState.favoriteProductIds.filter((itemId) => itemId !== id) : [...prototypeState.favoriteProductIds, id];
+    document.querySelectorAll(`[data-action="favorite"][data-product-id="${id}"]`).forEach((heart) => { heart.textContent = favorite ? "♡" : "♥"; });
+    saveState();
+    toast(favorite ? "Аромат удалён из избранного" : "Аромат сохранён в избранном");
     return;
   }
   if (action === "add-to-cart") {
-    prototypeState.cartQty = Math.max(1, prototypeState.cartQty);
+    const id = prototypeState.selectedProductId;
+    prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1;
+    saveState();
     toast("Аромат добавлен в корзину");
     setTimeout(() => render("cart"), 250);
     return;
   }
   if (action === "increase" || action === "decrease") {
-    prototypeState.cartQty = Math.max(0, prototypeState.cartQty + (action === "increase" ? 1 : -1));
+    const id = actionTarget.dataset.productId;
+    const nextQty = Math.max(0, (Number(prototypeState.cartItems[id]) || 0) + (action === "increase" ? 1 : -1));
+    if (nextQty) prototypeState.cartItems[id] = nextQty;
+    else delete prototypeState.cartItems[id];
     render("cart", { remember: false });
+    return;
+  }
+  if (action === "filter") {
+    prototypeState.catalogFilter = actionTarget.dataset.filter || "Все";
+    document.querySelectorAll(".chips .chip").forEach((chip) => chip.classList.toggle("active", chip === actionTarget));
+    applyCatalogFilters();
+    saveState();
+    toast(`Фильтр «${actionTarget.textContent.trim()}» применён`);
     return;
   }
   if (action === "points") {
@@ -503,8 +549,13 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "pay") {
-    if (prototypeState.usePoints) prototypeState.points = Math.max(0, prototypeState.points - Math.min(prototypeState.points, 500));
-    prototypeState.cartQty = 0;
+    const goods = cartGoodsMinor();
+    const promo = Math.round(goods * 0.1);
+    const usedPointsMinor = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
+    prototypeState.lastOrder = cartEntries().map(({ item, qty }) => ({ id: item.id, qty }));
+    prototypeState.lastOrderTotal = orderTotalMinor();
+    prototypeState.points = Math.max(0, prototypeState.points - Math.round(usedPointsMinor / 100));
+    prototypeState.cartItems = {};
     render("orders");
     toast("Заказ SIM-00001 успешно оформлен");
     return;
@@ -561,22 +612,14 @@ document.addEventListener("click", async (event) => {
   const label = button?.textContent.trim() || "";
   if (label === "Перейти в каталог" || label === "Найти аромат" || label === "Выбрать аромат" || label === "Сбросить фильтры" || label === "Повторить") render("catalog");
   else if (label === "Попробовать ещё раз" || label === "Выбрать другой способ") render("checkout");
-  else if (label === "Повторить заказ") { prototypeState.cartQty = 1; render("cart"); }
+  else if (label === "Повторить заказ") { prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty])); render("cart"); }
   else if (button?.closest(".switch") || button?.classList.contains("switch")) button.classList.toggle("off");
 
-  if (button?.classList.contains("chip") && button.closest(".chips")) {
-    button.parentElement.querySelectorAll(".chip").forEach((chip) => chip.classList.remove("active"));
-    button.classList.add("active");
-    toast(`Фильтр «${label}» применён`);
-  }
 });
 
 document.addEventListener("input", (event) => {
   if (event.target.id !== "catalog-search") return;
-  const query = event.target.value.trim().toLowerCase();
-  document.querySelectorAll(".product-card").forEach((card) => {
-    card.hidden = query.length > 0 && !card.dataset.productName.includes(query) && !"бергамот ирис сандал".includes(query);
-  });
+  applyCatalogFilters();
 });
 
 render(screen, { remember: false });
