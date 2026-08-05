@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>PdParizz MVP Preview</title>
+    <style>
+:root {
+  --ink: #171512;
+  --muted: #746f68;
+  --paper: #f7f4ed;
+  --surface: #fffdf8;
+  --line: #e8e1d6;
+  --rose: #a55461;
+  --rose-soft: #f3e3e5;
+  --gold: #9a742d;
+  --success: #2f7255;
+  --danger: #a43e3e;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --shadow: 0 22px 70px rgba(31, 24, 18, 0.18);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: #e8e2d9;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button, input { font: inherit; }
+button { color: inherit; cursor: pointer; }
+a, [data-screen], [data-action], .product-card, .menu-row, .order-card { cursor: pointer; }
+button:active, [data-screen]:active, .product-card:active { transform: scale(.985); }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid rgba(165,84,97,.35); outline-offset: 2px; }
+
+.audit-panel {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 280px;
+  padding: 28px 22px;
+  background: #1d1a17;
+  color: #fff;
+  overflow: auto;
+}
+.audit-panel strong { display: block; font-size: 17px; letter-spacing: .02em; }
+.audit-panel small { display: block; color: #aaa39a; margin-top: 7px; }
+.audit-panel nav { display: grid; gap: 8px; margin-top: 28px; }
+.audit-panel a {
+  color: #d8d2ca;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.audit-panel a:hover, .audit-panel a.active { color: #fff; background: #37312c; }
+
+.stage {
+  min-height: 100vh;
+  margin-left: 280px;
+  padding: 36px;
+  display: grid;
+  place-items: center;
+}
+.phone {
+  width: 390px;
+  height: 844px;
+  border: 10px solid #171513;
+  border-radius: 48px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  position: relative;
+}
+.status-bar {
+  height: 34px;
+  padding: 10px 22px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--paper);
+  font-size: 11px;
+  font-weight: 700;
+}
+.app-surface { height: calc(100% - 34px); overflow: auto; scrollbar-width: none; }
+.app-surface::-webkit-scrollbar { display: none; }
+
+.screen { min-height: 100%; padding: 18px 18px 94px; background: var(--paper); }
+.screen.with-action { padding-bottom: 116px; }
+.topline { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 22px; }
+.eyebrow { margin: 0 0 6px; color: var(--rose); font-size: 11px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: 0; font: 500 31px/1.05 Georgia, serif; letter-spacing: -.025em; }
+h2 { margin-bottom: 12px; font: 500 23px/1.15 Georgia, serif; }
+h3 { margin-bottom: 5px; font-size: 15px; }
+.subtle { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.icon-btn, .back-btn {
+  width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+  display: grid; place-items: center; flex: 0 0 auto;
+}
+.back-btn { font-size: 19px; }
+
+.search {
+  height: 48px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
+  display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--muted); font-size: 14px;
+}
+.search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.search input::placeholder { color: var(--muted); }
+.chips { display: flex; gap: 8px; margin: 14px 0 20px; overflow: hidden; }
+.chip { white-space: nowrap; border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 8px 12px; font-size: 12px; }
+.chip.active { border-color: var(--ink); background: var(--ink); color: #fff; }
+
+.hero {
+  min-height: 176px; border-radius: var(--radius-lg); padding: 22px; color: #fff; margin-bottom: 24px;
+  background: radial-gradient(circle at 85% 20%, rgba(255,255,255,.45), transparent 23%), linear-gradient(140deg, #6d333e, #be7d86);
+  position: relative; overflow: hidden;
+}
+.hero::after { content: "P"; position: absolute; right: 18px; bottom: -40px; font: 150px Georgia, serif; color: rgba(255,255,255,.12); }
+.hero h2 { width: 68%; font-size: 28px; margin-top: 30px; }
+.hero p { font-size: 12px; color: rgba(255,255,255,.8); }
+
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 0 12px; }
+.section-head h2 { margin: 0; }
+.section-head span { color: var(--rose); font-size: 12px; }
+.product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.product-card { min-width: 0; }
+.product-art {
+  aspect-ratio: 1 / 1.18; border-radius: var(--radius-md); position: relative; overflow: hidden;
+  background: radial-gradient(circle at 70% 18%, #fff 0 4%, transparent 32%), linear-gradient(150deg, #e6d7c3, #b49b7c);
+}
+.product-card:nth-child(even) .product-art { background: radial-gradient(circle at 72% 17%, #fff 0 3%, transparent 30%), linear-gradient(150deg, #e4d5da, #9f707d); }
+.bottle {
+  position: absolute; width: 62px; height: 89px; left: 50%; top: 51%; transform: translate(-50%, -50%);
+  background: rgba(255,255,255,.72); border: 1px solid rgba(70,55,42,.25); border-radius: 5px 5px 12px 12px; box-shadow: 0 12px 18px rgba(53,35,22,.16);
+}
+.bottle::before { content: ""; position: absolute; width: 28px; height: 15px; top: -15px; left: 16px; background: #2d2925; border-radius: 3px 3px 0 0; }
+.bottle::after { content: "PdP"; position: absolute; left: 12px; right: 12px; top: 36px; border-top: 1px solid #a99a88; border-bottom: 1px solid #a99a88; padding: 5px 0; text-align: center; font: 10px Georgia, serif; }
+.heart { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,.78); }
+.product-meta { padding: 10px 2px 0; }
+.product-meta h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-meta p { margin: 0; color: var(--muted); font-size: 11px; }
+.price { margin-top: 7px; font-weight: 750; font-size: 14px; }
+
+.bottom-nav {
+  position: absolute; inset: auto 0 0; height: 78px; padding: 10px 16px 18px; background: rgba(255,253,248,.96); border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: repeat(4, 1fr); z-index: 5;
+}
+.nav-item { display: grid; place-items: center; align-content: center; gap: 4px; color: var(--muted); font-size: 10px; }
+.nav-item b { font-size: 18px; line-height: 1; font-weight: 500; }
+.nav-item.active { color: var(--rose); }
+
+.product-hero { height: 330px; margin: -18px -18px 22px; position: relative; background: linear-gradient(145deg, #eadfd0, #bca184); }
+.product-hero .bottle { width: 112px; height: 165px; border-radius: 9px 9px 20px 20px; }
+.product-hero .bottle::before { width: 48px; height: 23px; top: -23px; left: 31px; }
+.product-hero .bottle::after { left: 20px; right: 20px; top: 68px; font-size: 16px; padding: 10px 0; }
+.product-hero .back-btn, .product-hero .heart { position: absolute; top: 18px; z-index: 2; }
+.product-hero .back-btn { left: 18px; }
+.product-hero .heart { right: 18px; width: 42px; height: 42px; }
+.rating { color: var(--gold); font-size: 12px; }
+.notes { display: flex; gap: 8px; margin: 18px 0; }
+.note { flex: 1; padding: 12px 8px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.note b { display: block; font: 17px Georgia, serif; margin-bottom: 4px; }
+.note span { color: var(--muted); font-size: 10px; }
+
+.fixed-action {
+  position: absolute; inset: auto 0 0; padding: 12px 18px 18px; background: linear-gradient(transparent, var(--paper) 22%); z-index: 6;
+}
+.primary { width: 100%; min-height: 52px; border: 0; border-radius: 16px; background: var(--ink); color: #fff; font-weight: 750; }
+.primary.rose { background: var(--rose); }
+.row { display: flex; align-items: center; gap: 12px; }
+.between { justify-content: space-between; }
+
+.card { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.cart-line { display: grid; grid-template-columns: 74px 1fr auto; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.cart-line:last-child { border-bottom: 0; }
+.thumb { width: 74px; height: 88px; border-radius: 13px; background: linear-gradient(145deg, #e5d6c3, #b79e7e); position: relative; }
+.thumb .bottle { transform: translate(-50%,-50%) scale(.55); }
+.quantity { display: flex; align-items: center; gap: 11px; margin-top: 15px; }
+.quantity button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.summary { display: grid; gap: 12px; margin-top: 18px; }
+.summary .row { justify-content: space-between; font-size: 13px; }
+.summary .total { border-top: 1px solid var(--line); padding-top: 13px; font-weight: 800; font-size: 16px; }
+.loyalty-toggle { border-color: #e2c68d; background: #fffaf0; }
+.coin { width: 38px; height: 38px; border-radius: 50%; background: #c99735; color: #fff; display: grid; place-items: center; font-weight: 800; }
+.switch { width: 43px; height: 25px; border-radius: 20px; background: var(--rose); padding: 3px; }
+.switch::after { content: ""; display: block; margin-left: auto; width: 19px; height: 19px; border-radius: 50%; background: #fff; }
+.switch.off { background: #c7c0b6; }
+.switch.off::after { margin-left: 0; }
+.tariff.selected { border-color: var(--rose); box-shadow: 0 0 0 2px var(--rose-soft); }
+
+.field { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin-bottom: 10px; }
+.field label { display: block; color: var(--muted); font-size: 10px; margin-bottom: 5px; }
+.field strong { font-size: 13px; }
+.payment-card { display: flex; gap: 12px; align-items: center; }
+.radio { width: 20px; height: 20px; border: 6px solid var(--rose); border-radius: 50%; }
+
+.order-card { margin-bottom: 12px; }
+.order-card .order-number { font-weight: 800; font-size: 14px; }
+.status { display: inline-flex; padding: 6px 9px; border-radius: 999px; background: #e7f3ec; color: var(--success); font-size: 10px; font-weight: 800; }
+.timeline { margin: 22px 0 0 8px; }
+.timeline-item { position: relative; padding: 0 0 24px 28px; border-left: 1px solid #d6cec3; }
+.timeline-item::before { content: ""; position: absolute; left: -6px; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); border: 2px solid #bcb3a8; }
+.timeline-item.done::before { border-color: var(--success); background: var(--success); }
+.timeline-item:last-child { border-left-color: transparent; }
+.timeline-item h3 { margin-bottom: 3px; font-size: 13px; }
+
+.loyalty-hero { padding: 22px; border-radius: 24px; color: #fff; background: linear-gradient(135deg, #24201d, #5c4a3b); overflow: hidden; position: relative; }
+.loyalty-hero::after { content: "P"; position: absolute; right: 12px; top: -34px; font: 150px Georgia, serif; color: rgba(255,255,255,.06); }
+.balance { font: 38px Georgia, serif; margin: 18px 0 4px; }
+.balance small { font: 14px Inter, sans-serif; }
+.ledger { margin-top: 22px; }
+.ledger-row { padding: 14px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; }
+.ledger-row strong.plus { color: var(--success); }
+.ledger-row strong.minus { color: var(--rose); }
+
+.wheel-wrap { display: grid; place-items: center; margin: 30px 0; position: relative; }
+.wheel {
+  width: 272px; height: 272px; border-radius: 50%; border: 10px solid #fff8e8;
+  background: conic-gradient(#a55461 0 25%, #d8aa55 0 50%, #49382e 0 75%, #d9b6bb 0);
+  box-shadow: 0 16px 38px rgba(61,43,31,.22), inset 0 0 0 2px rgba(50,30,20,.15);
+  position: relative;
+}
+.wheel::before { content: ""; position: absolute; inset: 87px; border-radius: 50%; background: var(--surface); box-shadow: 0 5px 15px rgba(0,0,0,.15); }
+.wheel::after { content: "P"; position: absolute; inset: 0; display: grid; place-items: center; font: 32px Georgia, serif; color: var(--rose); }
+.wheel-pointer { position: absolute; top: -7px; width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 28px solid var(--ink); z-index: 2; }
+
+.avatar { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; background: var(--rose-soft); color: var(--rose); font: 28px Georgia, serif; }
+.menu { margin-top: 22px; }
+.menu-row { min-height: 54px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); font-size: 14px; }
+
+.state-panel { min-height: 570px; display: grid; place-items: center; text-align: center; padding: 34px; }
+.state-icon { width: 72px; height: 72px; border-radius: 50%; background: var(--rose-soft); color: var(--rose); display: grid; place-items: center; margin: 0 auto 18px; font-size: 28px; }
+.skeleton { background: linear-gradient(100deg, #eee9e1 20%, #faf7f1 45%, #eee9e1 70%); background-size: 300% 100%; animation: shimmer 1.5s infinite; border-radius: 12px; }
+.skeleton.line { height: 14px; margin: 9px 0; }
+.skeleton.tile { height: 210px; }
+@keyframes shimmer { to { background-position: -150% 0; } }
+@keyframes wheel-spin { from { transform: rotate(0deg); } to { transform: rotate(1110deg); } }
+.wheel.spinning { animation: wheel-spin 1.25s cubic-bezier(.12,.67,.18,1) forwards; }
+
+.prototype-toast {
+  position: absolute; left: 22px; right: 22px; bottom: 92px; z-index: 30;
+  padding: 13px 16px; border-radius: 14px; background: #24201d; color: #fff;
+  text-align: center; font-size: 13px; box-shadow: 0 12px 30px rgba(0,0,0,.24);
+  animation: toast-in .2s ease-out;
+}
+.offline-banner {
+  position: absolute; inset: 34px 0 auto; z-index: 40; padding: 10px 16px;
+  background: #3d3833; color: #fff; text-align: center; font-size: 12px; font-weight: 700;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+
+@media (max-width: 760px) {
+  .audit-panel { display: none; }
+  .stage { margin: 0; padding: 0; background: var(--paper); }
+  .phone { width: 100vw; height: 100vh; border: 0; border-radius: 0; box-shadow: none; }
+}
+
+body.audit-mode .audit-panel { display: none; }
+body.audit-mode .stage { margin: 0; padding: 0; background: var(--paper); }
+body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 0; box-shadow: none; }
+
+</style>
+  </head>
+  <body>
+    <aside class="audit-panel" aria-label="Навигация по preview">
+      <div>
+        <strong>PdParizz Visual QA</strong>
+        <small id="scenario-label"></small>
+      </div>
+      <nav id="audit-nav"></nav>
+    </aside>
+    <main class="stage">
+      <section class="phone" aria-label="Мобильный экран PdParizz">
+        <div class="status-bar"><span>9:41</span><span>● ◒ 5G ▰</span></div>
+        <div id="app" class="app-surface"></div>
+      </section>
+    </main>
+    <script type="module">
+const scenarios = [
+  ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
+  ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
+  ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
+  ["checkout", "Оформление"], ["orders", "Заказы"], ["order", "Заказ"],
+  ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"],
+  ["loyalty", "Лояльность"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
+  ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
+  ["referral", "Рефералы"], ["subscription", "Подписка"], ["wheel", "Колесо"], ["wheel-result", "Колесо · результат"],
+  ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
+  ["catalog-loading", "Loading"], ["catalog-empty", "Empty"], ["catalog-error", "Error"]
+];
+
+const params = new URLSearchParams(location.search);
+let screen = params.get("screen") || "catalog";
+if (params.get("audit") === "1") document.body.classList.add("audit-mode");
+
+const prototypeState = {
+  cartQty: 0,
+  favorite: false,
+  usePoints: true,
+  points: 500,
+  subscription: false,
+  history: [],
+};
+const orderTotalMinor = () => {
+  const goods = 249000 * Math.max(prototypeState.cartQty, 1);
+  const promo = Math.round(goods * 0.1);
+  const points = prototypeState.usePoints ? Math.min(prototypeState.points, 500) * 100 : 0;
+  return goods - promo - points + 35000;
+};
+
+const rub = (minor) => `${new Intl.NumberFormat("ru-RU").format(minor / 100)} ₽`;
+const bottle = '<span class="bottle" aria-hidden="true"></span>';
+const bottomNav = (active) => `<nav class="bottom-nav">
+  ${[["catalog","⌂","Главная"],["orders","▤","Заказы"],["loyalty","◇","Баллы"],["profile","○","Профиль"]].map(([id, icon, label]) =>
+    `<a class="nav-item ${active === id ? "active" : ""}" href="?screen=${id}"><b>${icon}</b><span>${label}</span></a>`).join("")}
+</nav>`;
+
+const productCard = (number, name, price) => `<article class="product-card" data-screen="product" data-product-name="${name.toLowerCase()}">
+  <div class="product-art">${bottle}<button class="heart" data-action="favorite" aria-label="В избранное">${prototypeState.favorite ? "♥" : "♡"}</button></div>
+  <div class="product-meta"><h3>${name}</h3><p>50 мл · стойкий аромат</p><div class="price">${rub(price)}</div></div>
+</article>`;
+
+const catalog = () => `<section class="screen">
+  <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌</button></div></div>
+  <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
+  <div class="chips"><button class="chip active">Все</button><button class="chip">Женские</button><button class="chip">Мужские</button><button class="chip">Унисекс</button></div>
+  <article class="hero"><p class="eyebrow">Новая коллекция</p><h2>Ароматы для тёплого вечера</h2><p>Мягкие древесные и цветочные ноты</p></article>
+  <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
+  <div class="product-grid">${[
+    "Attar collection Hayati", "Marc-Antoine Barrois Ganymede", "Paco Rabanne 1 Million",
+    "Lacoste Eau De L.12.12 Blanc", "Chanel Allure Homme Sport", "Creed Aventus",
+    "Giorgio Armani My Way", "Christian Dior J’adore", "Louis Vuitton eLVes", "DIPTIYQUE PHILOSYKOS"
+  ].map((name, index) => productCard(index + 1, name, 44900)).join("")}</div>
+  ${bottomNav("catalog")}
+</section>`;
+
+const product = () => `<section class="screen with-action">
+  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite">${prototypeState.favorite ? "♥" : "♡"}</button>${bottle}</div>
+  <p class="eyebrow">PdParizz Collection</p><div class="row between"><h1>Attar collection Hayati</h1><strong>${rub(44900)}</strong></div>
+  <p class="subtle">Парфюмерная вода · 15 мл</p><p class="rating">★★★★★ <span class="subtle">Бестселлер</span></p>
+  <div class="notes"><div class="note"><b>Бергамот</b><span>верхние ноты</span></div><div class="note"><b>Ирис</b><span>сердце</span></div><div class="note"><b>Сандал</b><span>база</span></div></div>
+  <h3>Характер аромата</h3><p class="subtle">Тёплый, мягкий и уверенный. Раскрывается постепенно и остаётся близко к коже.</p>
+  <div class="fixed-action"><button class="primary" data-action="add-to-cart">Добавить в корзину · ${rub(44900)}</button></div>
+</section>`;
+
+const cart = () => {
+  if (prototypeState.cartQty < 1) return cartEmpty();
+  const goods = 249000 * prototypeState.cartQty;
+  const promo = Math.round(goods * 0.1);
+  const points = prototypeState.usePoints ? Math.min(prototypeState.points, 500) * 100 : 0;
+  const total = orderTotalMinor();
+  return `<section class="screen with-action">
+    <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
+    <div class="card"><div class="cart-line"><div class="thumb">${bottle}</div><div><h3>PdParizz №001</h3><p class="subtle">50 мл</p><div class="quantity"><button data-action="decrease">−</button><strong>${prototypeState.cartQty}</strong><button data-action="increase">+</button></div></div><strong>${rub(goods)}</strong></div></div>
+    <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать 500 баллов</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
+    <div class="field" style="margin-top:12px"><label>Промокод</label><strong>WELCOME10</strong></div>
+    <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>−${rub(promo)}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(35000)}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
+    <div class="fixed-action"><button class="primary" data-screen="checkout">Перейти к оформлению</button></div>
+  </section>`;
+};
+
+const cartEmpty = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Корзина</h1><span></span></div><div class="state-panel"><div><div class="state-icon">◇</div><h2>Корзина пока пуста</h2><p class="subtle">Соберите свою коллекцию ароматов — выбранные товары сохранятся здесь.</p><button class="primary" style="padding:0 28px;width:auto">Перейти в каталог</button></div></div>${bottomNav("catalog")}</section>`;
+
+const favorites = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div><span class="subtle">2 товара</span></div><div class="product-grid">${productCard(1,"PdParizz №017",269000)}${productCard(2,"PdParizz №001",249000)}</div>${bottomNav("profile")}</section>`;
+
+const favoritesEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div></div><div class="state-panel"><div><div class="state-icon">♡</div><h2>Сохраняйте любимое</h2><p class="subtle">Нажмите на сердце в карточке аромата — он появится здесь.</p><button class="primary" style="padding:0 28px;width:auto">Найти аромат</button></div></div>${bottomNav("profile")}</section>`;
+
+const checkout = () => `<section class="screen with-action">
+  <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Оформление</h1><span></span></div>
+  <h3>Получатель</h3><div class="field"><label>Имя и телефон</label><strong>Артур · +7 ••• •••-12-34</strong></div>
+  <h3 style="margin-top:22px">Доставка</h3><div class="field"><label>Адрес</label><strong>Москва, ул. Примерная, 12</strong></div><div class="field"><label>Способ</label><strong>Курьер · 1–2 дня · ${rub(35000)}</strong></div>
+  <h3 style="margin-top:22px">Оплата</h3><div class="card payment-card"><span class="radio"></span><div><h3>Банковская карта</h3><p class="subtle" style="margin:0">Тестовая успешная оплата</p></div></div>
+  <div class="summary"><div class="row total"><span>К оплате</span><span>${rub(orderTotalMinor())}</span></div></div>
+  <div class="fixed-action"><button class="primary rose" data-action="pay">Оплатить ${rub(orderTotalMinor())}</button></div>
+</section>`;
+
+const orders = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
+  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">4 августа · 2 товара</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px">${bottle}</div></div><strong>${rub(433200)} ›</strong></div></article>
+  <article class="card order-card" data-screen="order-delivered"><div class="row between"><span class="order-number">SIM-00000</span><span class="status">Доставлен</span></div><p class="subtle">17 июля · 1 товар</p><div class="row between"><div class="thumb" style="width:48px;height:56px">${bottle}</div><strong>${rub(229000)} ›</strong></div></article>
+  ${bottomNav("orders")}</section>`;
+
+const order = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
+  <div class="card"><div class="row between"><span class="subtle">Ожидаемая доставка</span><strong>6 августа</strong></div></div>
+  <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Собираем заказ</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item"><h3>Передадим в доставку</h3><p class="subtle">Ожидается завтра</p></div><div class="timeline-item"><h3>Заказ доставлен</h3></div></div>
+  <div class="card"><div class="cart-line" style="padding-top:0"><div class="thumb">${bottle}</div><div><h3>PdParizz №001</h3><p class="subtle">2 × ${rub(249000)}</p></div><strong>${rub(498000)}</strong></div><div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(433200)}</span></div></div></div>
+</section>`;
+
+const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
+
+const orderDelivered = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Доставлен</span></div>
+  <div class="card loyalty-toggle"><div class="row"><span class="coin">P</span><div><h3>+199 баллов начислено</h3><p class="subtle" style="margin:0">За доставленный заказ</p></div></div></div>
+  <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Заказ собран</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item done"><h3>Передан в доставку</h3><p class="subtle">5 августа, 09:30</p></div><div class="timeline-item done"><h3>Заказ доставлен</h3><p class="subtle">6 августа, 17:42</p></div></div>
+  <button class="primary">Повторить заказ</button></section>`;
+
+const loyalty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Программа лояльности</p><h1>Мои баллы</h1></div><button class="icon-btn">?</button></div>
+  <div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">PdParizz Club</p><div class="balance">${new Intl.NumberFormat("ru-RU").format(prototypeState.points)} <small>баллов</small></div><p class="subtle" style="color:#d7d0c8">До 30% стоимости заказа</p></div>
+  <div class="section-head"><h2>История</h2><span>Все операции</span></div><div class="ledger"><div class="ledger-row"><div><h3>Заказ SIM-00001</h3><p class="subtle">Сегодня</p></div><strong class="minus">−500</strong></div><div class="ledger-row"><div><h3>Приветственные баллы</h3><p class="subtle">4 августа</p></div><strong class="plus">+1 000</strong></div></div>
+  ${bottomNav("loyalty")}</section>`;
+
+const profile = () => `<section class="screen"><p class="eyebrow">Личный кабинет</p><h1>Профиль</h1><div class="row" style="margin-top:28px"><div class="avatar">А</div><div><h2 style="margin-bottom:5px">Артур</h2><p class="subtle">+7 ••• •••-12-34</p></div></div>
+  <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
+  ${bottomNav("profile")}</section>`;
+
+const authPhone = () => `<section class="screen with-action" style="padding-top:84px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 34px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p><div class="field"><label>Номер телефона</label><strong>+7 999 123-45-67</strong></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-screen="auth-code">Получить код</button></div></section>`;
+
+const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><span></span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на +7 ••• •••-45-67</p><div class="row" style="justify-content:center;gap:10px">${[0,0,0,0].map(() => '<div class="field" style="width:58px;height:64px;display:grid;place-items:center;padding:0"><strong style="font-size:24px">0</strong></div>').join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Получить новый код через 00:42</p><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
+
+const profileEdit = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Личные данные</h1><span></span></div><div class="field"><label>Имя</label><strong>Артур</strong></div><div class="field"><label>Телефон</label><strong>+7 ••• •••-12-34</strong></div><div class="field"><label>Email</label><strong>artur@example.test</strong></div><div class="section-head"><h2>Уведомления</h2></div><div class="card"><div class="menu-row"><div><h3>Статусы заказов</h3><p class="subtle" style="margin:0">Важные push-уведомления</p></div><span class="switch"></span></div><div class="menu-row"><div><h3>Акции и новинки</h3><p class="subtle" style="margin:0">Только с вашего согласия</p></div><span class="switch" style="background:#c7c0b6"><span></span></span></div></div><div class="fixed-action"><button class="primary">Сохранить</button></div></section>`;
+
+const addresses = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Адреса</h1><span></span></div><article class="card" style="border-color:#c99aa1"><div class="row between"><div><p class="eyebrow">Основной</p><h3>Дом</h3></div><span>•••</span></div><p class="subtle" style="margin:8px 0 0">Москва, ул. Примерная, 12, кв. 34<br>Домофон 34</p></article><article class="card" style="margin-top:12px"><div class="row between"><h3>Работа</h3><span>•••</span></div><p class="subtle" style="margin:8px 0 0">Москва, ул. Рабочая, 7</p></article><div class="fixed-action"><button class="primary rose">Добавить адрес</button></div></section>`;
+
+const notifications = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div><span class="subtle">Прочитать все</span></div><div class="card" style="border-color:#c99aa1;margin-bottom:12px"><div class="row" style="align-items:flex-start"><span class="coin" style="width:38px;height:38px;flex:none">P</span><div><div class="row between"><h3>Баллы начислены</h3><span style="width:8px;height:8px;border-radius:50%;background:var(--rose)"></span></div><p class="subtle">+199 баллов за доставленный заказ SIM-00001</p><small class="subtle">сегодня, 17:42</small></div></div></div><div class="card" style="margin-bottom:12px"><div class="row" style="align-items:flex-start"><span class="state-icon" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">✓</span><div><h3>Заказ передан в доставку</h3><p class="subtle">Курьер привезёт заказ завтра</p><small class="subtle">вчера, 09:30</small></div></div></div><div class="card"><div class="row" style="align-items:flex-start"><span class="state-icon" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">◇</span><div><h3>Новая коллекция</h3><p class="subtle">Познакомьтесь с ароматами для тёплого вечера</p><small class="subtle">2 августа</small></div></div></div>${bottomNav("profile")}</section>`;
+
+const notificationsEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div></div><div class="state-panel"><div><div class="state-icon">◌</div><h2>Пока тихо</h2><p class="subtle">Здесь появятся статусы заказов, начисления баллов и важные новости.</p></div></div>${bottomNav("profile")}</section>`;
+
+const referral = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Приглашайте друзей</p><span></span></div><h1 style="font-size:36px;max-width:310px">По 300 баллов каждому</h1><p class="subtle" style="margin:14px 0 24px">Друг получит награду после первого доставленного заказа — и вам начислим столько же.</p><div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">Ваш код</p><div class="balance" style="letter-spacing:.08em">ARTUR7X</div><button class="chip" data-action="share" style="background:#fff;color:var(--ink);border:0;margin-top:12px">Поделиться ссылкой</button></div><div class="section-head"><h2>Статистика</h2></div><div class="card"><div class="row between"><span>Перешли по ссылке</span><strong>4</strong></div><div class="row between" style="margin-top:16px"><span>Получили награду</span><strong>2</strong></div><div class="row between" style="margin-top:16px"><span>Начислено</span><strong class="plus">+600 P</strong></div></div><p class="subtle" style="margin-top:18px">Нельзя приглашать себя или использовать одну установку повторно.</p></section>`;
+
+const subscription = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">PdParizz Club</p><span></span></div><h1 style="font-size:38px">${prototypeState.subscription ? "Подписка активна" : "Больше любимых ароматов"}</h1><p class="subtle" style="margin:14px 0 24px">Преимущества действуют на все заказы, пока активна подписка.</p><div class="card" style="background:#24201d;color:#fff;border:0"><div class="row"><span class="coin">P</span><div><h3>Двойные баллы</h3><p class="subtle" style="color:#cfc7bf;margin:0">10% после доставки</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">✓</span><div><h3>Бесплатная доставка</h3><p class="subtle" style="color:#cfc7bf;margin:0">Без минимальной суммы</p></div></div></div><div class="section-head"><h2>Выберите тариф</h2></div><div class="card tariff selected" data-action="tariff"><div class="row between"><div><p class="eyebrow">Выгодно</p><h3>Год</h3><p class="subtle" style="margin:0">249 ₽ в месяц</p></div><strong>2 990 ₽</strong></div></div><div class="card tariff" data-action="tariff" style="margin-top:10px"><div class="row between"><div><h3>Месяц</h3><p class="subtle" style="margin:0">Отмена в любой момент</p></div><strong>399 ₽</strong></div></div><div class="fixed-action"><button class="primary rose" data-action="subscribe">${prototypeState.subscription ? "Готово" : "Подключить за 2 990 ₽"}</button></div></section>`;
+
+const wheel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ежедневный подарок</p><span>?</span></div><h1 style="text-align:center">Колесо PdParizz</h1><p class="subtle" style="text-align:center">Одна попытка в день. Результат определяет сервер.</p><div class="wheel-wrap"><span class="wheel-pointer"></span><div class="wheel"></div></div><p class="subtle" style="text-align:center">Сегодня доступна 1 попытка</p><div class="fixed-action"><button class="primary rose" data-action="spin">Крутить колесо</button></div></section>`;
+
+const wheelResult = () => `<section class="screen"><div class="state-panel"><div><div class="state-icon" style="width:92px;height:92px;font-size:36px;background:#fff1cf;color:#9a742d">P</div><p class="eyebrow">Поздравляем</p><h1 style="font-size:42px">+100 баллов</h1><p class="subtle" style="margin:16px 0 28px">Баллы уже в вашем кошельке. Следующая попытка будет доступна завтра.</p><button class="primary rose" style="padding:0 28px;width:auto">Выбрать аромат</button><p class="subtle" style="margin-top:20px">Правила wheel-sim-v1</p></div></div></section>`;
+
+const privacy = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Конфиденциальность</h1><span></span></div><h2>Как используются данные</h2><p class="subtle">MVP хранит данные профиля и покупок только для работы личного кабинета.</p>${[["Что сохраняем","Номер телефона, имя, email, адреса, заказы, баллы и настройки уведомлений."],["Аналитика","Только обезличенные события без содержимого полей и номера телефона."],["Push-уведомления","Разрешение запрашивается после вашего согласия."],["Удаление данных","Выход очищает локальную сессию. Полное удаление появится после подключения API."]].map(([title,body]) => `<div class="card" style="margin-top:12px"><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div>`).join("")}<p class="subtle" style="margin-top:18px">Версия для MVP · 4 августа 2026</p></section>`;
+const offline = () => `<section class="screen">${catalog().replace('<section class="screen">','').replace('</section>','')}</section><div class="offline-banner">Нет сети · показываем сохранённые данные</div>`;
+
+const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
+const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
+
+const renderers = { catalog, product, cart, favorites, checkout, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+
+const app = document.querySelector("#app");
+const scenarioLabel = document.querySelector("#scenario-label");
+const auditNav = document.querySelector("#audit-nav");
+
+function render(next = screen, { remember = true } = {}) {
+  if (remember && next !== screen) prototypeState.history.push(screen);
+  screen = renderers[next] ? next : "catalog";
+  app.innerHTML = renderers[screen]();
+  app.scrollTop = 0;
+  scenarioLabel.textContent = `390 × 844 · ${screen} · интерактивный режим`;
+  auditNav.innerHTML = scenarios.map(([id, label]) => `<a class="${id === screen ? "active" : ""}" href="?screen=${id}" data-screen="${id}">${label}</a>`).join("");
+}
+
+function goBack() {
+  render(prototypeState.history.pop() || "catalog", { remember: false });
+}
+
+function toast(message) {
+  document.querySelector(".prototype-toast")?.remove();
+  const element = document.createElement("div");
+  element.className = "prototype-toast";
+  element.textContent = message;
+  document.querySelector(".phone").append(element);
+  setTimeout(() => element.remove(), 1800);
+}
+
+document.addEventListener("click", async (event) => {
+  const actionTarget = event.target.closest("[data-action]");
+  const action = actionTarget?.dataset.action;
+
+  if (action === "back" || event.target.closest(".back-btn")) {
+    event.preventDefault();
+    goBack();
+    return;
+  }
+  if (action === "favorite") {
+    event.preventDefault();
+    event.stopPropagation();
+    prototypeState.favorite = !prototypeState.favorite;
+    document.querySelectorAll(".heart").forEach((heart) => { heart.textContent = prototypeState.favorite ? "♥" : "♡"; });
+    toast(prototypeState.favorite ? "Аромат сохранён в избранном" : "Аромат удалён из избранного");
+    return;
+  }
+  if (action === "add-to-cart") {
+    prototypeState.cartQty = Math.max(1, prototypeState.cartQty);
+    toast("Аромат добавлен в корзину");
+    setTimeout(() => render("cart"), 250);
+    return;
+  }
+  if (action === "increase" || action === "decrease") {
+    prototypeState.cartQty = Math.max(0, prototypeState.cartQty + (action === "increase" ? 1 : -1));
+    render("cart", { remember: false });
+    return;
+  }
+  if (action === "points") {
+    prototypeState.usePoints = !prototypeState.usePoints;
+    render("cart", { remember: false });
+    return;
+  }
+  if (action === "pay") {
+    if (prototypeState.usePoints) prototypeState.points = Math.max(0, prototypeState.points - Math.min(prototypeState.points, 500));
+    prototypeState.cartQty = 0;
+    render("orders");
+    toast("Заказ SIM-00001 успешно оформлен");
+    return;
+  }
+  if (action === "login") {
+    render("catalog");
+    toast("Вы вошли в профиль");
+    return;
+  }
+  if (action === "logout") {
+    render("auth-phone");
+    toast("Локальная сессия завершена");
+    return;
+  }
+  if (action === "share") {
+    try { await navigator.clipboard.writeText("https://pdparizz.ru/r/ARTUR7X"); } catch {}
+    toast("Реферальная ссылка скопирована");
+    return;
+  }
+  if (action === "tariff") {
+    document.querySelectorAll(".tariff").forEach((card) => card.classList.remove("selected"));
+    actionTarget.classList.add("selected");
+    const price = actionTarget.textContent.includes("399") ? "399 ₽" : "2 990 ₽";
+    const button = document.querySelector('[data-action="subscribe"]');
+    if (button) button.textContent = `Подключить за ${price}`;
+    return;
+  }
+  if (action === "subscribe") {
+    prototypeState.subscription = true;
+    render("profile");
+    toast("Подписка PdParizz активирована");
+    return;
+  }
+  if (action === "spin") {
+    actionTarget.disabled = true;
+    actionTarget.textContent = "Определяем подарок…";
+    document.querySelector(".wheel")?.classList.add("spinning");
+    setTimeout(() => {
+      prototypeState.points += 100;
+      render("wheel-result");
+    }, 1300);
+    return;
+  }
+
+  const screenTarget = event.target.closest("[data-screen]");
+  if (screenTarget?.dataset.screen) {
+    event.preventDefault();
+    render(screenTarget.dataset.screen);
+    return;
+  }
+
+  const button = event.target.closest("button");
+  const label = button?.textContent.trim() || "";
+  if (label === "Перейти в каталог" || label === "Найти аромат" || label === "Выбрать аромат" || label === "Сбросить фильтры" || label === "Повторить") render("catalog");
+  else if (label === "Попробовать ещё раз" || label === "Выбрать другой способ") render("checkout");
+  else if (label === "Повторить заказ") { prototypeState.cartQty = 1; render("cart"); }
+  else if (button?.closest(".switch") || button?.classList.contains("switch")) button.classList.toggle("off");
+
+  if (button?.classList.contains("chip") && button.closest(".chips")) {
+    button.parentElement.querySelectorAll(".chip").forEach((chip) => chip.classList.remove("active"));
+    button.classList.add("active");
+    toast(`Фильтр «${label}» применён`);
+  }
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.id !== "catalog-search") return;
+  const query = event.target.value.trim().toLowerCase();
+  document.querySelectorAll(".product-card").forEach((card) => {
+    card.hidden = query.length > 0 && !card.dataset.productName.includes(query) && !"бергамот ирис сандал".includes(query);
+  });
+});
+
+render(screen, { remember: false });
+
+</script>
+  </body>
+</html>
