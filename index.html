@@ -220,6 +220,16 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .quiz-progress span { display:block; height:100%; background:var(--rose); transition:width .25s ease; }
 .quiz-choice { width:100%; text-align:left; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
 .promo-strip { width:100%; border:0; text-align:left; margin:0 0 20px; background:#24201d; color:#fff; }
+.volume-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin:10px 0 18px; }
+.volume-option { min-height:58px; border:1px solid var(--line); border-radius:14px; background:var(--surface); display:grid; place-items:center; gap:2px; padding:8px; }
+.volume-option.selected { border-color:var(--rose); box-shadow:0 0 0 2px var(--rose-soft); }
+.volume-option small { color:var(--muted); font-size:10px; }
+.stock-line { color:var(--success); font-size:12px; font-weight:750; margin:12px 0; }
+.buy-actions { display:grid; grid-template-columns:1fr 1.25fr; gap:9px; }
+.review-stars { color:var(--gold); letter-spacing:.08em; }
+.review-bar { display:grid; grid-template-columns:18px 1fr 30px; gap:8px; align-items:center; margin:7px 0; font-size:11px; }
+.review-track { height:6px; border-radius:99px; background:#eee7dd; overflow:hidden; }
+.review-track span { display:block; height:100%; background:var(--gold); }
 .promo-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
 .promo-row button { border: 0; border-radius: 10px; padding: 9px 11px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 750; }
 .choice-card { width: 100%; text-align: left; margin-bottom: 10px; }
@@ -310,7 +320,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
     </main>
     <script type="module">
 const scenarios = [
-  ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"],
+  ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
   ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
@@ -363,6 +373,9 @@ const defaultState = {
   quizStep: 0,
   quizAnswers: {},
   quizResultIds: ["lv-pacific", "hayati", "creed-aventus"],
+  selectedVolume: 15,
+  productQuantity: 1,
+  cartVolumes: {},
   selectedProductId: "hayati",
   catalogFilter: "Все",
   profile: { name: "Артур", phone: "+7 999 123-45-67", email: "artur@example.test" },
@@ -374,13 +387,14 @@ const defaultState = {
   deliveryMethod: "courier",
   promoCode: "WELCOME10",
   promoApplied: true,
-  lastOrder: [{ id: "hayati", qty: 1 }],
+  lastOrder: [{ id: "hayati", qty: 1, volume: 15 }],
   lastOrderTotal: 75410,
 };
 let storedState = {};
 try { storedState = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch {}
 const prototypeState = { ...defaultState, ...storedState, history: [] };
 if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) prototypeState.cartItems = {};
+if (!prototypeState.cartVolumes || Array.isArray(prototypeState.cartVolumes)) prototypeState.cartVolumes = {};
 if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
@@ -392,6 +406,8 @@ if (params.get("welcome") === "1") {
 const deepLinkProduct = params.get("product");
 if (deepLinkProduct && products.some((item) => item.id === deepLinkProduct)) {
   prototypeState.selectedProductId = deepLinkProduct;
+  prototypeState.selectedVolume = 15;
+  prototypeState.productQuantity = 1;
   screen = "product";
 }
 const incomingReferral = (params.get("ref") || "").trim().toUpperCase();
@@ -401,9 +417,11 @@ if (incomingReferral && !prototypeState.referralRewardClaimed) {
 }
 const productById = (id) => products.find((item) => item.id === id) || products[0];
 const selectedProduct = () => productById(prototypeState.selectedProductId);
-const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => ({ item: productById(id), qty: Number(qty) || 0 })).filter(({ qty }) => qty > 0);
+const volumePrice = (item, volume = 15) => volume === 50 ? 119900 : volume === 30 ? 79900 : item.price;
+const volumeOldPrice = (item, volume = 15) => Math.round(item.oldPrice * (volume / 15) * (volume === 15 ? 1 : .86));
+const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => { const item = productById(id); const volume = Number(prototypeState.cartVolumes[id]) || 15; return { item, qty: Number(qty) || 0, volume, unitPrice: volumePrice(item, volume) }; }).filter(({ qty }) => qty > 0);
 const cartItemCount = () => cartEntries().reduce((sum, entry) => sum + entry.qty, 0);
-const cartGoodsMinor = () => cartEntries().reduce((sum, { item, qty }) => sum + item.price * qty, 0);
+const cartGoodsMinor = () => cartEntries().reduce((sum, { unitPrice, qty }) => sum + unitPrice * qty, 0);
 const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
 const selectedAddress = () => prototypeState.addresses.find((item) => item.id === prototypeState.selectedAddressId) || prototypeState.addresses[0];
 const deliveryPriceMinor = () => prototypeState.deliveryMethod === "pickup" ? 25000 : 35000;
@@ -418,7 +436,8 @@ const eventLabels = {
   login: "Вход выполнен", referral_reward: "Реферальный бонус", push_changed: "Настройка push",
   subscription_changed: "Изменена подписка", wheel_reward: "Получен подарок", install_requested: "Запрошена установка",
   onboarding_step: "Шаг onboarding", quiz_answer: "Ответ подбора", quiz_completed: "Подбор завершён",
-  promo_opened: "Открыто промо", reorder_started: "Повторная покупка"
+  promo_opened: "Открыто промо", reorder_started: "Повторная покупка", variant_selected: "Выбран объём",
+  buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы"
 };
 const track = (name, data = {}) => {
   prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
@@ -482,14 +501,20 @@ const catalog = () => `<section class="screen">
   ${bottomNav("catalog")}
 </section>`;
 
-const product = () => { const item = selectedProduct(); return `<section class="screen with-action">
-  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, 15 мл" referrerpolicy="no-referrer" /></div>
-  <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between"><h1>${item.name}</h1><strong>${rub(item.price)}</strong></div>
-  <p class="subtle">Парфюмерная вода · 15 мл · <s>${rub(item.oldPrice)}</s></p><p class="rating">★★★★★ <span class="subtle">Актуальный товар</span></p>
+const product = () => { const item = selectedProduct(); const volume = Number(prototypeState.selectedVolume) || 15; const price = volumePrice(item, volume); const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1); const related = products.filter((productItem) => productItem.id !== item.id && productItem.category === item.category).slice(0, 2); return `<section class="screen with-action">
+  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
+  <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between" style="align-items:flex-start"><h1>${item.name}</h1><strong>${rub(price)}</strong></div>
+  <p class="subtle">Парфюмерная вода · ${volume} мл · <s>${rub(volumeOldPrice(item, volume))}</s></p><button class="rating" data-action="open-reviews" style="border:0;background:transparent;padding:0">★★★★★ <span class="subtle">4,9 · 127 отзывов ›</span></button>
+  <p class="stock-line">● ${item.id === "aldebaran" ? "Осталось 4 флакона" : "В наличии · отправим сегодня"}</p>
+  <h3>Выберите объём</h3><div class="volume-grid">${[15,30,50].map((value) => `<button class="volume-option ${volume === value ? "selected" : ""}" data-action="volume" data-volume="${value}"><strong>${value} мл</strong><small>${rub(volumePrice(item,value))}</small></button>`).join("")}</div>
+  <div class="row between"><h3 style="margin:0">Количество</h3><div class="quantity" style="margin:0"><button data-action="product-decrease" aria-label="Уменьшить количество">−</button><strong>${quantity}</strong><button data-action="product-increase" aria-label="Увеличить количество">+</button></div></div>
   <div class="notes">${item.notes.map((note, index) => `<div class="note"><b>${note}</b><span>${["верхние ноты", "сердце", "база"][index]}</span></div>`).join("")}</div>
   <h3>Характер аромата</h3><p class="subtle">${item.description}</p>
-  <div class="fixed-action"><button class="primary" data-action="add-to-cart">Добавить в корзину · ${rub(item.price)}</button></div>
+  <div class="section-head"><h2>Похожие ароматы</h2><span data-screen="catalog">Все</span></div><div class="product-grid">${related.map(productCard).join("")}</div>
+  <div class="fixed-action"><div class="buy-actions"><button class="primary" data-action="add-to-cart">В корзину · ${quantity}</button><button class="primary rose" data-action="buy-now">Купить сейчас · ${rub(price * quantity)}</button></div></div>
 </section>`; };
+
+const reviews = () => { const item = selectedProduct(); const reviewsList = [["Марина","★★★★★","Очень стойкий и аккуратный аромат. Для сумки формат 15 мл идеален."],["Алексей","★★★★★","Похожее направление и удобный флакон. Доставка пришла быстро."],["Ольга","★★★★★","Сначала взяла пробный объём, теперь вернулась за 50 мл."],["Ирина","★★★★☆","Красивый шлейф, на коже раскрывается мягче через полчаса."]]; return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">${item.name}</p><h1>Отзывы</h1></div><span></span></div><div class="card"><div class="row" style="align-items:flex-start"><div><h1 style="font-size:52px">4,9</h1><p class="review-stars">★★★★★</p><p class="subtle">127 оценок</p></div><div style="flex:1">${[[5,86],[4,10],[3,3],[2,1],[1,0]].map(([stars,value]) => `<div class="review-bar"><span>${stars}</span><div class="review-track"><span style="width:${value}%"></span></div><small>${value}%</small></div>`).join("")}</div></div></div><div class="section-head"><h2>Покупатели говорят</h2><button class="chip">С фото</button></div>${reviewsList.map(([name,stars,body],index) => `<article class="card" style="margin-bottom:10px"><div class="row between"><strong>${name}</strong><span class="review-stars">${stars}</span></div><p class="subtle" style="margin:10px 0">${body}</p><div class="row between"><small class="subtle">Подтверждённая покупка · ${index + 2} августа</small><button class="chip" data-action="review-helpful">Полезно</button></div></article>`).join("")}</section>`; };
 
 const cart = () => {
   const entries = cartEntries();
@@ -500,7 +525,7 @@ const cart = () => {
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
-    ${entries.map(({ item, qty }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease" data-product-id="${item.id}" aria-label="Уменьшить ${item.name}">−</button><strong>${qty}</strong><button data-action="increase" data-product-id="${item.id}" aria-label="Увеличить ${item.name}">+</button></div></div><strong>${rub(item.price * qty)}</strong></div></div>`).join("")}
+    ${entries.map(({ item, qty, volume, unitPrice }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${rub(unitPrice)}</p><div class="quantity"><button data-action="decrease" data-product-id="${item.id}" aria-label="Уменьшить ${item.name}">−</button><strong>${qty}</strong><button data-action="increase" data-product-id="${item.id}" aria-label="Увеличить ${item.name}">+</button></div></div><strong>${rub(unitPrice * qty)}</strong></div></div>`).join("")}
     <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать доступные баллы</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
     <div class="field" style="margin-top:12px"><label>Промокод</label><div class="promo-row"><input id="promo-code" value="${prototypeState.promoCode || ""}" placeholder="Введите промокод" /><button data-action="promo">${prototypeState.promoApplied ? "Отменить" : "Применить"}</button></div></div>
     <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>${promo ? `−${rub(promo)}` : "Не применён"}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(deliveryPriceMinor())}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
@@ -534,7 +559,7 @@ const orders = () => { const entries = prototypeState.lastOrder || defaultState.
 const order = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; return `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
   <div class="card"><div class="row between"><span class="subtle">Ожидаемая доставка</span><strong>6 августа</strong></div></div>
   <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Собираем заказ</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item"><h3>Передадим в доставку</h3><p class="subtle">Ожидается завтра</p></div><div class="timeline-item"><h3>Заказ доставлен</h3></div></div>
-  <div class="card">${entries.map(({ id, qty }) => { const item = productById(id); return `<div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${qty} × ${rub(item.price)}</p></div><strong>${rub(item.price * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(prototypeState.lastOrderTotal || defaultState.lastOrderTotal)}</span></div></div></div>
+  <div class="card">${entries.map(({ id, qty, volume = 15 }) => { const item = productById(id); const unitPrice = volumePrice(item, volume); return `<div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${qty} × ${rub(unitPrice)}</p></div><strong>${rub(unitPrice * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(prototypeState.lastOrderTotal || defaultState.lastOrderTotal)}</span></div></div></div>
 </section>`; };
 
 const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
@@ -583,7 +608,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, cart, favorites, checkout, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, checkout, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -686,7 +711,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "quiz-add-all") {
-    prototypeState.quizResultIds.forEach((id) => { prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1; });
+    prototypeState.quizResultIds.forEach((id) => { prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1; prototypeState.cartVolumes[id] = 15; });
     track("add_to_cart", { product: "quiz_bundle", count: prototypeState.quizResultIds.length });
     render("cart");
     toast("Три аромата добавлены в корзину");
@@ -694,10 +719,33 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "reorder") {
     prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty]));
+    prototypeState.cartVolumes = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, volume = 15 }) => [id, volume]));
     prototypeState.promoApplied = false;
     track("reorder_started", { order: "SIM-00001", items: cartItemCount() });
     render("cart");
     toast("Предыдущий заказ добавлен в корзину");
+    return;
+  }
+  if (action === "volume") {
+    prototypeState.selectedVolume = Number(actionTarget.dataset.volume) || 15;
+    track("variant_selected", { product: prototypeState.selectedProductId, volume: `${prototypeState.selectedVolume} мл` });
+    render("product", { remember: false });
+    return;
+  }
+  if (action === "product-increase" || action === "product-decrease") {
+    const delta = action === "product-increase" ? 1 : -1;
+    prototypeState.productQuantity = Math.max(1, Math.min(9, (Number(prototypeState.productQuantity) || 1) + delta));
+    render("product", { remember: false });
+    return;
+  }
+  if (action === "open-reviews") {
+    track("reviews_opened", { product: prototypeState.selectedProductId });
+    render("reviews");
+    return;
+  }
+  if (action === "review-helpful") {
+    actionTarget.textContent = actionTarget.textContent === "Спасибо" ? "Полезно" : "Спасибо";
+    toast("Спасибо за обратную связь");
     return;
   }
   if (action === "favorite") {
@@ -715,18 +763,31 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "add-to-cart") {
     const id = prototypeState.selectedProductId;
-    prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1;
-    track("add_to_cart", { product: id });
+    const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
+    prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
+    prototypeState.cartVolumes[id] = Number(prototypeState.selectedVolume) || 15;
+    track("add_to_cart", { product: id, volume: `${prototypeState.cartVolumes[id]} мл`, quantity });
     saveState();
-    toast("Аромат добавлен в корзину");
+    toast(`${quantity} шт. добавлено в корзину`);
     setTimeout(() => render("cart"), 250);
+    return;
+  }
+  if (action === "buy-now") {
+    const id = prototypeState.selectedProductId;
+    const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
+    prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
+    prototypeState.cartVolumes[id] = Number(prototypeState.selectedVolume) || 15;
+    track("buy_now", { product: id, volume: `${prototypeState.cartVolumes[id]} мл`, quantity });
+    track("checkout_started", { items: cartItemCount(), source: "buy_now" });
+    render("checkout");
+    toast("Товар добавлен · осталось подтвердить заказ");
     return;
   }
   if (action === "increase" || action === "decrease") {
     const id = actionTarget.dataset.productId;
     const nextQty = Math.max(0, (Number(prototypeState.cartItems[id]) || 0) + (action === "increase" ? 1 : -1));
     if (nextQty) prototypeState.cartItems[id] = nextQty;
-    else delete prototypeState.cartItems[id];
+    else { delete prototypeState.cartItems[id]; delete prototypeState.cartVolumes[id]; }
     render("cart", { remember: false });
     return;
   }
@@ -806,11 +867,12 @@ document.addEventListener("click", async (event) => {
     const goods = cartGoodsMinor();
     const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
     const usedPointsMinor = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
-    prototypeState.lastOrder = cartEntries().map(({ item, qty }) => ({ id: item.id, qty }));
+    prototypeState.lastOrder = cartEntries().map(({ item, qty, volume }) => ({ id: item.id, qty, volume }));
     prototypeState.lastOrderTotal = orderTotalMinor();
     track("order_completed", { order: "SIM-00001", total: rub(prototypeState.lastOrderTotal) });
     prototypeState.points = Math.max(0, prototypeState.points - Math.round(usedPointsMinor / 100));
     prototypeState.cartItems = {};
+    prototypeState.cartVolumes = {};
     render("orders");
     toast("Заказ SIM-00001 успешно оформлен");
     return;
@@ -914,6 +976,8 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     if (screenTarget.dataset.productId) {
       prototypeState.selectedProductId = screenTarget.dataset.productId;
+      prototypeState.selectedVolume = Number(prototypeState.cartVolumes[screenTarget.dataset.productId]) || 15;
+      prototypeState.productQuantity = 1;
       track("product_view", { product: screenTarget.dataset.productId });
     }
     if (screenTarget.dataset.screen === "checkout") track("checkout_started", { items: cartItemCount() });
