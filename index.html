@@ -128,6 +128,7 @@ h3 { margin-bottom: 5px; font-size: 15px; }
   background: radial-gradient(circle at 70% 18%, #fff 0 4%, transparent 32%), linear-gradient(150deg, #e6d7c3, #b49b7c);
 }
 .product-card:nth-child(even) .product-art { background: radial-gradient(circle at 72% 17%, #fff 0 3%, transparent 30%), linear-gradient(150deg, #e4d5da, #9f707d); }
+.product-image { width: 100%; height: 100%; object-fit: contain; padding: 12px; background: #f4f0e8; display: block; }
 .bottle {
   position: absolute; width: 62px; height: 89px; left: 50%; top: 51%; transform: translate(-50%, -50%);
   background: rgba(255,255,255,.72); border: 1px solid rgba(70,55,42,.25); border-radius: 5px 5px 12px 12px; box-shadow: 0 12px 18px rgba(53,35,22,.16);
@@ -149,6 +150,7 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .nav-item.active { color: var(--rose); }
 
 .product-hero { height: 330px; margin: -18px -18px 22px; position: relative; background: linear-gradient(145deg, #eadfd0, #bca184); }
+.product-hero-image { width: 100%; height: 100%; object-fit: contain; padding: 24px 38px; background: #f1ece3; display: block; }
 .product-hero .bottle { width: 112px; height: 165px; border-radius: 9px 9px 20px 20px; }
 .product-hero .bottle::before { width: 48px; height: 23px; top: -23px; left: 31px; }
 .product-hero .bottle::after { left: 20px; right: 20px; top: 68px; font-size: 16px; padding: 10px 0; }
@@ -173,6 +175,7 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .cart-line { display: grid; grid-template-columns: 74px 1fr auto; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .cart-line:last-child { border-bottom: 0; }
 .thumb { width: 74px; height: 88px; border-radius: 13px; background: linear-gradient(145deg, #e5d6c3, #b79e7e); position: relative; }
+.thumb img { width: 100%; height: 100%; object-fit: contain; padding: 6px; border-radius: inherit; background: #f4f0e8; }
 .thumb .bottle { transform: translate(-50%,-50%) scale(.55); }
 .quantity { display: flex; align-items: center; gap: 11px; margin-top: 15px; }
 .quantity button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
@@ -292,16 +295,31 @@ const params = new URLSearchParams(location.search);
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
 
+const products = [
+  { id: "hayati", name: "Attar collection Hayati", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/14319028/xrqd7xq4qpgvxtkpj6jgmtj8jbp9lmz2/x640", sourceUrl: "https://pdparizz.biz/products/attar-collection-hayati-7-101474", notes: ["Малина", "Сливки", "Ваниль"], description: "Сочный фруктово-гурманский аромат с малиной, сливками и мягкой ванильной базой." },
+  { id: "paco-million", name: "Paco Rabanne 1 Million", price: 44900, oldPrice: 169000, category: "Мужской", image: "https://avatars.mds.yandex.net/get-yastore/15395726/7t6h45hkh94wddd68s5drwc5nx554dhh/x640", sourceUrl: "https://pdparizz.biz/products/paco-rabanne-1-million-2-101582", notes: ["Мандарин", "Корица", "Кожа"], description: "Яркий пряный аромат с цитрусовым стартом, корицей и тёплым кожаным шлейфом." },
+  { id: "lacoste-blanc", name: "Lacoste Eau De L.12.12 Blanc", price: 44900, oldPrice: 169000, category: "Мужской", image: "https://avatars.mds.yandex.net/get-yastore/15395726/j6svf7lpxn9hjr8lrqlw2s7gzhtm45wg/x640", sourceUrl: "https://pdparizz.biz/products/lacoste-eau-de-l1212-blanc-2-101502", notes: ["Грейпфрут", "Тубероза", "Кедр"], description: "Чистый свежий аромат: цитрусовая прохлада, белые цветы и сухая древесная база." },
+  { id: "chanel-sport", name: "Chanel Allure Homme Sport", price: 44900, oldPrice: 169000, category: "Мужской", image: "https://avatars.mds.yandex.net/get-yastore/15395726/zq6dlqh5j8ljhhlql4cdqk7bpzqh5hm4/x640", sourceUrl: "https://pdparizz.biz/products/chanel-allure-homme-sport-13-101507", notes: ["Мандарин", "Перец", "Бобы тонка"], description: "Энергичная композиция с искристым цитрусом, пряным сердцем и сливочным шлейфом." },
+  { id: "creed-aventus", name: "Creed Aventus", price: 44900, oldPrice: 169000, category: "Мужской", image: "https://avatars.mds.yandex.net/get-yastore/15395726/9hftlmdmq2jn7t6tzg8zl2p4bp7jjx6l/x640", sourceUrl: "https://pdparizz.biz/products/creed-aventus-4-101495?variant=104046", notes: ["Ананас", "Берёза", "Мускус"], description: "Контраст сочного ананаса, дымной берёзы и уверенной древесно-мускусной базы." },
+  { id: "armani-my-way", name: "Giorgio Armani My Way", price: 44900, oldPrice: 169000, category: "Женский", image: "https://avatars.mds.yandex.net/get-yastore/16104656/tg889kknvtc2mtmdlscmgj8xwhdt6tnc/x640", sourceUrl: "https://pdparizz.biz/products/giorgio-armani-my-way-2-101471", notes: ["Бергамот", "Тубероза", "Ваниль"], description: "Светлый цветочный аромат с бергамотом, насыщенной туберозой и мягкой ванилью." },
+  { id: "dior-jadore", name: "Christian Dior J’adore", price: 44900, oldPrice: 169000, category: "Женский", image: "https://avatars.mds.yandex.net/get-yastore/14319028/fsfffvcblvhzxwvxbl5qn6nvthpphkn2/x640", sourceUrl: "https://pdparizz.biz/products/christian-dior-jadore-2-101463", notes: ["Груша", "Жасмин", "Мускус"], description: "Женственная цветочно-фруктовая композиция с сочной грушей и прозрачным жасмином." },
+  { id: "lv-pacific", name: "Louis Vuitton Pacific Chill", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/14319028/cff86jlx724cwwgjcpvl7x5z22k466rj/x640", sourceUrl: "https://pdparizz.biz/products/louis-vuitton-pacific-chill-101558", notes: ["Цитрон", "Мята", "Инжир"], description: "Освежающий зелёно-цитрусовый аромат с прохладной мятой и мягким фруктовым акцентом." },
+  { id: "aldebaran", name: "Marc-Antoine Barrois Aldebaran", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/14319028/m65bkrwntcmbvrd74qmldv8wmscrzgpp/x640", sourceUrl: "https://pdparizz.biz/products/marc-antoine-barrois-aldebaran-2-101599", notes: ["Тубероза", "Мате", "Паприка"], description: "Необычный сияющий аромат, где белые цветы встречаются с зелёными и пряными оттенками." },
+  { id: "mango-skin", name: "Vilhelm Parfumerie Mango skin", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/15395726/zt9n5c72pj8twsbph9vjsggwxdcjxpqp/x640", sourceUrl: "https://pdparizz.biz/products/vilhelm-parfumerie-mango-skin-2-101420", notes: ["Манго", "Смородина", "Мускус"], description: "Спелое манго и чёрная смородина в сочной, яркой композиции с чистым мускусным шлейфом." }
+];
+
 const prototypeState = {
   cartQty: 0,
   favorite: false,
   usePoints: true,
   points: 500,
   subscription: false,
+  selectedProductId: "hayati",
   history: [],
 };
+const selectedProduct = () => products.find((item) => item.id === prototypeState.selectedProductId) || products[0];
 const orderTotalMinor = () => {
-  const goods = 44900 * Math.max(prototypeState.cartQty, 1);
+  const goods = selectedProduct().price * Math.max(prototypeState.cartQty, 1);
   const promo = Math.round(goods * 0.1);
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   return goods - promo - points + 35000;
@@ -314,9 +332,9 @@ const bottomNav = (active) => `<nav class="bottom-nav">
     `<a class="nav-item ${active === id ? "active" : ""}" href="?screen=${id}"><b>${icon}</b><span>${label}</span></a>`).join("")}
 </nav>`;
 
-const productCard = (number, name, price) => `<article class="product-card" data-screen="product" data-product-name="${name.toLowerCase()}">
-  <div class="product-art">${bottle}<button class="heart" data-action="favorite" aria-label="В избранное">${prototypeState.favorite ? "♥" : "♡"}</button></div>
-  <div class="product-meta"><h3>${name}</h3><p>15 мл · стойкий аромат</p><div class="price">${rub(price)}</div></div>
+const productCard = (item) => `<article class="product-card" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()}">
+  <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="heart" data-action="favorite" aria-label="В избранное">${prototypeState.favorite ? "♥" : "♡"}</button></div>
+  <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><div class="price">${rub(item.price)}</div></div>
 </article>`;
 
 const catalog = () => `<section class="screen">
@@ -325,32 +343,29 @@ const catalog = () => `<section class="screen">
   <div class="chips"><button class="chip active">Все</button><button class="chip">Женские</button><button class="chip">Мужские</button><button class="chip">Унисекс</button></div>
   <article class="hero"><p class="eyebrow">Новая коллекция</p><h2>Ароматы для тёплого вечера</h2><p>Мягкие древесные и цветочные ноты</p></article>
   <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
-  <div class="product-grid">${[
-    "Attar collection Hayati", "Marc-Antoine Barrois Ganymede", "Paco Rabanne 1 Million",
-    "Lacoste Eau De L.12.12 Blanc", "Chanel Allure Homme Sport", "Creed Aventus",
-    "Giorgio Armani My Way", "Christian Dior J’adore", "Louis Vuitton eLVes", "DIPTIYQUE PHILOSYKOS"
-  ].map((name, index) => productCard(index + 1, name, 44900)).join("")}</div>
+  <div class="product-grid">${products.map(productCard).join("")}</div>
   ${bottomNav("catalog")}
 </section>`;
 
-const product = () => `<section class="screen with-action">
-  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite">${prototypeState.favorite ? "♥" : "♡"}</button>${bottle}</div>
-  <p class="eyebrow">PdParizz Collection</p><div class="row between"><h1>Attar collection Hayati</h1><strong>${rub(44900)}</strong></div>
-  <p class="subtle">Парфюмерная вода · 15 мл</p><p class="rating">★★★★★ <span class="subtle">Бестселлер</span></p>
-  <div class="notes"><div class="note"><b>Бергамот</b><span>верхние ноты</span></div><div class="note"><b>Ирис</b><span>сердце</span></div><div class="note"><b>Сандал</b><span>база</span></div></div>
-  <h3>Характер аромата</h3><p class="subtle">Тёплый, мягкий и уверенный. Раскрывается постепенно и остаётся близко к коже.</p>
-  <div class="fixed-action"><button class="primary" data-action="add-to-cart">Добавить в корзину · ${rub(44900)}</button></div>
-</section>`;
+const product = () => { const item = selectedProduct(); return `<section class="screen with-action">
+  <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite">${prototypeState.favorite ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, 15 мл" referrerpolicy="no-referrer" /></div>
+  <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between"><h1>${item.name}</h1><strong>${rub(item.price)}</strong></div>
+  <p class="subtle">Парфюмерная вода · 15 мл · <s>${rub(item.oldPrice)}</s></p><p class="rating">★★★★★ <span class="subtle">Актуальный товар</span></p>
+  <div class="notes">${item.notes.map((note, index) => `<div class="note"><b>${note}</b><span>${["верхние ноты", "сердце", "база"][index]}</span></div>`).join("")}</div>
+  <h3>Характер аромата</h3><p class="subtle">${item.description}</p>
+  <div class="fixed-action"><button class="primary" data-action="add-to-cart">Добавить в корзину · ${rub(item.price)}</button></div>
+</section>`; };
 
 const cart = () => {
   if (prototypeState.cartQty < 1) return cartEmpty();
-  const goods = 44900 * prototypeState.cartQty;
+  const item = selectedProduct();
+  const goods = item.price * prototypeState.cartQty;
   const promo = Math.round(goods * 0.1);
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
-    <div class="card"><div class="cart-line"><div class="thumb">${bottle}</div><div><h3>Attar collection Hayati</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease">−</button><strong>${prototypeState.cartQty}</strong><button data-action="increase">+</button></div></div><strong>${rub(goods)}</strong></div></div>
+    <div class="card"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease">−</button><strong>${prototypeState.cartQty}</strong><button data-action="increase">+</button></div></div><strong>${rub(goods)}</strong></div></div>
     <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать 500 баллов</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
     <div class="field" style="margin-top:12px"><label>Промокод</label><strong>WELCOME10</strong></div>
     <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>−${rub(promo)}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(35000)}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
@@ -360,7 +375,7 @@ const cart = () => {
 
 const cartEmpty = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Корзина</h1><span></span></div><div class="state-panel"><div><div class="state-icon">◇</div><h2>Корзина пока пуста</h2><p class="subtle">Соберите свою коллекцию ароматов — выбранные товары сохранятся здесь.</p><button class="primary" style="padding:0 28px;width:auto">Перейти в каталог</button></div></div>${bottomNav("catalog")}</section>`;
 
-const favorites = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div><span class="subtle">2 товара</span></div><div class="product-grid">${productCard(1,"PdParizz №017",269000)}${productCard(2,"PdParizz №001",249000)}</div>${bottomNav("profile")}</section>`;
+const favorites = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div><span class="subtle">2 товара</span></div><div class="product-grid">${productCard(products[0])}${productCard(products[4])}</div>${bottomNav("profile")}</section>`;
 
 const favoritesEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div></div><div class="state-panel"><div><div class="state-icon">♡</div><h2>Сохраняйте любимое</h2><p class="subtle">Нажмите на сердце в карточке аромата — он появится здесь.</p><button class="primary" style="padding:0 28px;width:auto">Найти аромат</button></div></div>${bottomNav("profile")}</section>`;
 
@@ -381,7 +396,7 @@ const orders = () => `<section class="screen"><div class="topline"><div><p class
 const order = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
   <div class="card"><div class="row between"><span class="subtle">Ожидаемая доставка</span><strong>6 августа</strong></div></div>
   <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Собираем заказ</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item"><h3>Передадим в доставку</h3><p class="subtle">Ожидается завтра</p></div><div class="timeline-item"><h3>Заказ доставлен</h3></div></div>
-  <div class="card"><div class="cart-line" style="padding-top:0"><div class="thumb">${bottle}</div><div><h3>Attar collection Hayati</h3><p class="subtle">1 × ${rub(44900)}</p></div><strong>${rub(44900)}</strong></div><div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(orderTotalMinor())}</span></div></div></div>
+  <div class="card"><div class="cart-line" style="padding-top:0"><div class="thumb"><img src="${selectedProduct().image}" alt="${selectedProduct().name}" referrerpolicy="no-referrer" /></div><div><h3>${selectedProduct().name}</h3><p class="subtle">1 × ${rub(selectedProduct().price)}</p></div><strong>${rub(selectedProduct().price)}</strong></div><div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(orderTotalMinor())}</span></div></div></div>
 </section>`;
 
 const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
@@ -537,6 +552,7 @@ document.addEventListener("click", async (event) => {
   const screenTarget = event.target.closest("[data-screen]");
   if (screenTarget?.dataset.screen) {
     event.preventDefault();
+    if (screenTarget.dataset.productId) prototypeState.selectedProductId = screenTarget.dataset.productId;
     render(screenTarget.dataset.screen);
     return;
   }
