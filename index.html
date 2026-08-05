@@ -385,7 +385,10 @@ if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoritePr
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
-if (params.get("welcome") === "1" || (params.get("source") === "installed" && !prototypeState.onboardingCompleted)) screen = "onboarding";
+if (params.get("welcome") === "1") {
+  screen = "onboarding";
+  prototypeState.onboardingStep = 0;
+} else if (params.get("source") === "installed" && !prototypeState.onboardingCompleted) screen = "onboarding";
 const deepLinkProduct = params.get("product");
 if (deepLinkProduct && products.some((item) => item.id === deepLinkProduct)) {
   prototypeState.selectedProductId = deepLinkProduct;
