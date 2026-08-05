@@ -29,6 +29,7 @@
 body { margin: 0; min-height: 100vh; }
 button, input { font: inherit; }
 button { color: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
 a, [data-screen], [data-action], .product-card, .menu-row, .order-card { cursor: pointer; }
 button:active, [data-screen]:active, .product-card:active { transform: scale(.985); }
 button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid rgba(165,84,97,.35); outline-offset: 2px; }
@@ -194,6 +195,8 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .field label { display: block; color: var(--muted); font-size: 10px; margin-bottom: 5px; }
 .field strong { font-size: 13px; }
 .field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.otp-grid { display: grid; grid-template-columns: repeat(4, 58px); justify-content: center; gap: 10px; }
+.otp-input { width: 58px; height: 64px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: center; font-size: 24px; font-weight: 750; color: var(--ink); }
 .promo-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
 .promo-row button { border: 0; border-radius: 10px; padding: 9px 11px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 750; }
 .choice-card { width: 100%; text-align: left; margin-bottom: 10px; }
@@ -313,13 +316,23 @@ const products = [
   { id: "mango-skin", name: "Vilhelm Parfumerie Mango skin", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/15395726/zt9n5c72pj8twsbph9vjsggwxdcjxpqp/x640", sourceUrl: "https://pdparizz.biz/products/vilhelm-parfumerie-mango-skin-2-101420", notes: ["Манго", "Смородина", "Мускус"], description: "Спелое манго и чёрная смородина в сочной, яркой композиции с чистым мускусным шлейфом." }
 ];
 
-const storageKey = "pdparizz-mvp-state-v3";
+const storageKey = "pdparizz-mvp-state-v4";
 const defaultState = {
   cartItems: {},
   favoriteProductIds: ["hayati", "creed-aventus"],
   usePoints: true,
   points: 500,
   subscription: false,
+  subscriptionPlan: "annual",
+  subscriptionStartedAt: null,
+  isAuthenticated: false,
+  loginPhone: "+7 999 123-45-67",
+  pushOrders: true,
+  pushMarketing: false,
+  lastWheelSpinDate: "",
+  referralCode: "",
+  referralRewardPending: false,
+  referralRewardClaimed: false,
   selectedProductId: "hayati",
   catalogFilter: "Все",
   profile: { name: "Артур", phone: "+7 999 123-45-67", email: "artur@example.test" },
@@ -341,6 +354,16 @@ if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) protot
 if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
+const deepLinkProduct = params.get("product");
+if (deepLinkProduct && products.some((item) => item.id === deepLinkProduct)) {
+  prototypeState.selectedProductId = deepLinkProduct;
+  screen = "product";
+}
+const incomingReferral = (params.get("ref") || "").trim().toUpperCase();
+if (incomingReferral && !prototypeState.referralRewardClaimed) {
+  prototypeState.referralCode = incomingReferral;
+  prototypeState.referralRewardPending = true;
+}
 const productById = (id) => products.find((item) => item.id === id) || products[0];
 const selectedProduct = () => productById(prototypeState.selectedProductId);
 const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => ({ item: productById(id), qty: Number(qty) || 0 })).filter(({ qty }) => qty > 0);
@@ -349,6 +372,8 @@ const cartGoodsMinor = () => cartEntries().reduce((sum, { item, qty }) => sum + 
 const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
 const selectedAddress = () => prototypeState.addresses.find((item) => item.id === prototypeState.selectedAddressId) || prototypeState.addresses[0];
 const deliveryPriceMinor = () => prototypeState.deliveryMethod === "pickup" ? 25000 : 35000;
+const todayKey = () => new Date().toLocaleDateString("sv-SE");
+const canSpinToday = () => prototypeState.lastWheelSpinDate !== todayKey();
 const saveState = () => {
   const { history, ...persisted } = prototypeState;
   try { localStorage.setItem(storageKey, JSON.stringify(persisted)); } catch {}
@@ -454,11 +479,11 @@ const profile = () => `<section class="screen"><p class="eyebrow">Личный �
   <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
   ${bottomNav("profile")}</section>`;
 
-const authPhone = () => `<section class="screen with-action" style="padding-top:84px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 34px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p><div class="field"><label>Номер телефона</label><strong>+7 999 123-45-67</strong></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-screen="auth-code">Получить код</button></div></section>`;
+const authPhone = () => `<section class="screen with-action" style="padding-top:70px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 24px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#c99aa1;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>Код ${prototypeState.referralCode}</h3><p class="subtle" style="margin:0">После входа начислим 300 приветственных баллов.</p></div>` : ""}<div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" /></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button></div></section>`;
 
-const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><span></span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на +7 ••• •••-45-67</p><div class="row" style="justify-content:center;gap:10px">${[0,0,0,0].map(() => '<div class="field" style="width:58px;height:64px;display:grid;place-items:center;padding:0"><strong style="font-size:24px">0</strong></div>').join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Получить новый код через 00:42</p><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
+const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><span></span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на ${prototypeState.loginPhone}</p><div class="otp-grid">${[0,1,2,3].map((index) => `<input class="otp-input" aria-label="Цифра ${index + 1}" inputmode="numeric" maxlength="1" pattern="[0-9]*" />`).join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Демо-код: <strong>0000</strong></p><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
 
-const profileEdit = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Личные данные</h1><span></span></div><div class="field"><label>Имя</label><input id="profile-name" value="${prototypeState.profile.name}" /></div><div class="field"><label>Телефон</label><input id="profile-phone" value="${prototypeState.profile.phone}" inputmode="tel" /></div><div class="field"><label>Email</label><input id="profile-email" value="${prototypeState.profile.email}" inputmode="email" /></div><div class="section-head"><h2>Уведомления</h2></div><div class="card"><div class="menu-row"><div><h3>Статусы заказов</h3><p class="subtle" style="margin:0">Важные push-уведомления</p></div><span class="switch"></span></div><div class="menu-row"><div><h3>Акции и новинки</h3><p class="subtle" style="margin:0">Только с вашего согласия</p></div><span class="switch off"></span></div></div><div class="fixed-action"><button class="primary" data-action="save-profile">Сохранить</button></div></section>`;
+const profileEdit = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Личные данные</h1><span></span></div><div class="field"><label>Имя</label><input id="profile-name" value="${prototypeState.profile.name}" /></div><div class="field"><label>Телефон</label><input id="profile-phone" value="${prototypeState.profile.phone}" inputmode="tel" /></div><div class="field"><label>Email</label><input id="profile-email" value="${prototypeState.profile.email}" inputmode="email" /></div><div class="section-head"><h2>Уведомления</h2></div><div class="card"><button class="menu-row" data-action="push-toggle" data-push="orders" style="width:100%;border:0;background:transparent;text-align:left"><div><h3>Статусы заказов</h3><p class="subtle" style="margin:0">Важные push-уведомления</p></div><span class="switch ${prototypeState.pushOrders ? "" : "off"}"></span></button><button class="menu-row" data-action="push-toggle" data-push="marketing" style="width:100%;border:0;background:transparent;text-align:left"><div><h3>Акции и новинки</h3><p class="subtle" style="margin:0">Только с вашего согласия</p></div><span class="switch ${prototypeState.pushMarketing ? "" : "off"}"></span></button></div><div class="fixed-action"><button class="primary" data-action="save-profile">Сохранить</button></div></section>`;
 
 const addresses = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Адреса</h1><span></span></div>${prototypeState.addresses.map((address) => `<button class="card choice-card ${address.id === prototypeState.selectedAddressId ? "selected" : ""}" data-action="select-address" data-address-id="${address.id}"><div class="row between"><div><p class="eyebrow">${address.id === prototypeState.selectedAddressId ? "Выбран" : "Адрес"}</p><h3>${address.label}</h3></div><span>${address.id === prototypeState.selectedAddressId ? "✓" : "○"}</span></div><p class="subtle" style="margin:8px 0 0">${address.line}${address.details ? `<br>${address.details}` : ""}</p></button>`).join("")}<div class="section-head"><h2>Новый адрес</h2></div><div class="field"><label>Название</label><input id="new-address-label" placeholder="Например, Дача" /></div><div class="field"><label>Адрес</label><input id="new-address-line" placeholder="Город, улица, дом, квартира" /></div><button class="primary rose" data-action="add-address">Добавить адрес</button>${bottomNav("profile")}</section>`;
 
@@ -466,11 +491,11 @@ const notifications = () => `<section class="screen"><div class="topline"><div><
 
 const notificationsEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div></div><div class="state-panel"><div><div class="state-icon">◌</div><h2>Пока тихо</h2><p class="subtle">Здесь появятся статусы заказов, начисления баллов и важные новости.</p></div></div>${bottomNav("profile")}</section>`;
 
-const referral = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Приглашайте друзей</p><span></span></div><h1 style="font-size:36px;max-width:310px">По 300 баллов каждому</h1><p class="subtle" style="margin:14px 0 24px">Друг получит награду после первого доставленного заказа — и вам начислим столько же.</p><div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">Ваш код</p><div class="balance" style="letter-spacing:.08em">ARTUR7X</div><button class="chip" data-action="share" style="background:#fff;color:var(--ink);border:0;margin-top:12px">Поделиться ссылкой</button></div><div class="section-head"><h2>Статистика</h2></div><div class="card"><div class="row between"><span>Перешли по ссылке</span><strong>4</strong></div><div class="row between" style="margin-top:16px"><span>Получили награду</span><strong>2</strong></div><div class="row between" style="margin-top:16px"><span>Начислено</span><strong class="plus">+600 P</strong></div></div><p class="subtle" style="margin-top:18px">Нельзя приглашать себя или использовать одну установку повторно.</p></section>`;
+const referral = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Приглашайте друзей</p><span></span></div><h1 style="font-size:36px;max-width:310px">По 300 баллов каждому</h1><p class="subtle" style="margin:14px 0 24px">Друг получит награду после первого доставленного заказа — и вам начислим столько же.</p><div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">Ваш код</p><div class="balance" style="letter-spacing:.08em">ARTUR7X</div><button class="chip" data-action="share" style="background:#fff;color:var(--ink);border:0;margin-top:12px">Скопировать ссылку</button></div><div class="section-head"><h2>Статистика</h2></div><div class="card"><div class="row between"><span>Перешли по ссылке</span><strong>4</strong></div><div class="row between" style="margin-top:16px"><span>Получили награду</span><strong>2</strong></div><div class="row between" style="margin-top:16px"><span>Начислено</span><strong class="plus">+600 P</strong></div></div><p class="subtle" style="margin-top:18px">Нельзя приглашать себя или использовать одну установку повторно.</p></section>`;
 
-const subscription = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">PdParizz Club</p><span></span></div><h1 style="font-size:38px">${prototypeState.subscription ? "Подписка активна" : "Больше любимых ароматов"}</h1><p class="subtle" style="margin:14px 0 24px">Преимущества действуют на все заказы, пока активна подписка.</p><div class="card" style="background:#24201d;color:#fff;border:0"><div class="row"><span class="coin">P</span><div><h3>Двойные баллы</h3><p class="subtle" style="color:#cfc7bf;margin:0">10% после доставки</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">✓</span><div><h3>Бесплатная доставка</h3><p class="subtle" style="color:#cfc7bf;margin:0">Без минимальной суммы</p></div></div></div><div class="section-head"><h2>Выберите тариф</h2></div><div class="card tariff selected" data-action="tariff"><div class="row between"><div><p class="eyebrow">Выгодно</p><h3>Год</h3><p class="subtle" style="margin:0">249 ₽ в месяц</p></div><strong>2 990 ₽</strong></div></div><div class="card tariff" data-action="tariff" style="margin-top:10px"><div class="row between"><div><h3>Месяц</h3><p class="subtle" style="margin:0">Отмена в любой момент</p></div><strong>399 ₽</strong></div></div><div class="fixed-action"><button class="primary rose" data-action="subscribe">${prototypeState.subscription ? "Готово" : "Подключить за 2 990 ₽"}</button></div></section>`;
+const subscription = () => { const annual = prototypeState.subscriptionPlan === "annual"; return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">PdParizz Club</p><span></span></div><h1 style="font-size:38px">${prototypeState.subscription ? "Подписка активна" : "Больше любимых ароматов"}</h1><p class="subtle" style="margin:14px 0 24px">${prototypeState.subscription ? `Тариф «${annual ? "Год" : "Месяц"}». Управлять подпиской можно прямо здесь.` : "Преимущества действуют на все заказы, пока активна подписка."}</p><div class="card" style="background:#24201d;color:#fff;border:0"><div class="row"><span class="coin">P</span><div><h3>Двойные баллы</h3><p class="subtle" style="color:#cfc7bf;margin:0">10% после доставки</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">✓</span><div><h3>Бесплатная доставка</h3><p class="subtle" style="color:#cfc7bf;margin:0">Без минимальной суммы</p></div></div></div><div class="section-head"><h2>Выберите тариф</h2></div><button class="card tariff ${annual ? "selected" : ""}" data-action="tariff" data-plan="annual" style="width:100%;text-align:left"><div class="row between"><div><p class="eyebrow">Выгодно</p><h3>Год</h3><p class="subtle" style="margin:0">249 ₽ в месяц</p></div><strong>2 990 ₽</strong></div></button><button class="card tariff ${annual ? "" : "selected"}" data-action="tariff" data-plan="monthly" style="margin-top:10px;width:100%;text-align:left"><div class="row between"><div><h3>Месяц</h3><p class="subtle" style="margin:0">Отмена в любой момент</p></div><strong>399 ₽</strong></div></button><div class="fixed-action"><button class="primary ${prototypeState.subscription ? "" : "rose"}" data-action="subscribe">${prototypeState.subscription ? "Отменить подписку" : `Подключить за ${annual ? "2 990 ₽" : "399 ₽"}`}</button></div></section>`; };
 
-const wheel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ежедневный подарок</p><span>?</span></div><h1 style="text-align:center">Колесо PdParizz</h1><p class="subtle" style="text-align:center">Одна попытка в день. Результат определяет сервер.</p><div class="wheel-wrap"><span class="wheel-pointer"></span><div class="wheel"></div></div><p class="subtle" style="text-align:center">Сегодня доступна 1 попытка</p><div class="fixed-action"><button class="primary rose" data-action="spin">Крутить колесо</button></div></section>`;
+const wheel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ежедневный подарок</p><span>?</span></div><h1 style="text-align:center">Колесо PdParizz</h1><p class="subtle" style="text-align:center">Одна попытка в день. Результат определяет сервер.</p><div class="wheel-wrap"><span class="wheel-pointer"></span><div class="wheel"></div></div><p class="subtle" style="text-align:center">${canSpinToday() ? "Сегодня доступна 1 попытка" : "Сегодняшний подарок уже получен"}</p><div class="fixed-action"><button class="primary ${canSpinToday() ? "rose" : ""}" data-action="spin" ${canSpinToday() ? "" : "disabled"}>${canSpinToday() ? "Крутить колесо" : "Попробуйте завтра"}</button></div></section>`;
 
 const wheelResult = () => `<section class="screen"><div class="state-panel"><div><div class="state-icon" style="width:92px;height:92px;font-size:36px;background:#fff1cf;color:#9a742d">P</div><p class="eyebrow">Поздравляем</p><h1 style="font-size:42px">+100 баллов</h1><p class="subtle" style="margin:16px 0 28px">Баллы уже в вашем кошельке. Следующая попытка будет доступна завтра.</p><button class="primary rose" style="padding:0 28px;width:auto">Выбрать аромат</button><p class="subtle" style="margin-top:20px">Правила wheel-sim-v1</p></div></div></section>`;
 
@@ -603,6 +628,13 @@ document.addEventListener("click", async (event) => {
     toast("Личные данные сохранены");
     return;
   }
+  if (action === "push-toggle") {
+    const key = actionTarget.dataset.push === "marketing" ? "pushMarketing" : "pushOrders";
+    prototypeState[key] = !prototypeState[key];
+    render("profile-edit", { remember: false });
+    toast(prototypeState[key] ? "Push-уведомления включены" : "Push-уведомления отключены");
+    return;
+  }
   if (action === "select-address") {
     prototypeState.selectedAddressId = actionTarget.dataset.addressId;
     render("addresses", { remember: false });
@@ -632,40 +664,69 @@ document.addEventListener("click", async (event) => {
     toast("Заказ SIM-00001 успешно оформлен");
     return;
   }
+  if (action === "send-code") {
+    const phone = (document.querySelector("#auth-phone-input")?.value || "").trim();
+    if (phone.replace(/\D/g, "").length < 10) { toast("Введите корректный номер"); return; }
+    prototypeState.loginPhone = phone;
+    render("auth-code");
+    document.querySelector(".otp-input")?.focus();
+    toast("Код отправлен · в демо используйте 0000");
+    return;
+  }
   if (action === "login") {
+    const code = [...document.querySelectorAll(".otp-input")].map((input) => input.value).join("");
+    if (code !== "0000") { toast("Неверный код · введите 0000"); return; }
+    prototypeState.isAuthenticated = true;
+    prototypeState.profile = { ...prototypeState.profile, phone: prototypeState.loginPhone };
+    let referralMessage = "";
+    if (prototypeState.referralRewardPending && !prototypeState.referralRewardClaimed) {
+      prototypeState.points += 300;
+      prototypeState.referralRewardPending = false;
+      prototypeState.referralRewardClaimed = true;
+      referralMessage = " · +300 баллов по приглашению";
+    }
     render("catalog");
-    toast("Вы вошли в профиль");
+    toast(`Вы вошли в профиль${referralMessage}`);
     return;
   }
   if (action === "logout") {
+    prototypeState.isAuthenticated = false;
     render("auth-phone");
     toast("Локальная сессия завершена");
     return;
   }
   if (action === "share") {
-    try { await navigator.clipboard.writeText("https://pdparizz.ru/r/ARTUR7X"); } catch {}
+    try { await navigator.clipboard.writeText("https://achukhliebov.github.io/pdparizz-mobile-demo/?ref=ARTUR7X&screen=auth-phone"); } catch {}
     toast("Реферальная ссылка скопирована");
     return;
   }
   if (action === "tariff") {
-    document.querySelectorAll(".tariff").forEach((card) => card.classList.remove("selected"));
-    actionTarget.classList.add("selected");
-    const price = actionTarget.textContent.includes("399") ? "399 ₽" : "2 990 ₽";
-    const button = document.querySelector('[data-action="subscribe"]');
-    if (button) button.textContent = `Подключить за ${price}`;
+    prototypeState.subscriptionPlan = actionTarget.dataset.plan === "monthly" ? "monthly" : "annual";
+    render("subscription", { remember: false });
+    toast(prototypeState.subscriptionPlan === "monthly" ? "Выбран тариф «Месяц»" : "Выбран тариф «Год»");
     return;
   }
   if (action === "subscribe") {
-    prototypeState.subscription = true;
-    render("profile");
-    toast("Подписка PdParizz активирована");
+    if (prototypeState.subscription) {
+      prototypeState.subscription = false;
+      prototypeState.subscriptionStartedAt = null;
+      render("subscription", { remember: false });
+      toast("Подписка отменена · доступ сохранён до конца периода");
+    } else {
+      prototypeState.subscription = true;
+      prototypeState.subscriptionStartedAt = new Date().toISOString();
+      render("profile");
+      toast("Подписка PdParizz активирована");
+    }
     return;
   }
   if (action === "spin") {
+    if (!canSpinToday()) { toast("Следующая попытка будет доступна завтра"); return; }
     actionTarget.disabled = true;
     actionTarget.textContent = "Определяем подарок…";
     document.querySelector(".wheel")?.classList.add("spinning");
     setTimeout(() => {
+      prototypeState.lastWheelSpinDate = todayKey();
       prototypeState.points += 100;
       render("wheel-result");
     }, 1300);
@@ -690,11 +751,15 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.id !== "catalog-search") return;
-  applyCatalogFilters();
+  if (event.target.id === "catalog-search") { applyCatalogFilters(); return; }
+  if (event.target.classList.contains("otp-input")) {
+    event.target.value = event.target.value.replace(/\D/g, "").slice(-1);
+    if (event.target.value) event.target.nextElementSibling?.focus();
+  }
 });
 
 render(screen, { remember: false });
+if (incomingReferral && prototypeState.referralRewardPending) setTimeout(() => toast("Реферальный подарок готов · войдите, чтобы получить 300 баллов"), 250);
 
 </script>
   </body>
