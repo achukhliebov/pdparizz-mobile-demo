@@ -193,6 +193,11 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .field { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin-bottom: 10px; }
 .field label { display: block; color: var(--muted); font-size: 10px; margin-bottom: 5px; }
 .field strong { font-size: 13px; }
+.field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.promo-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.promo-row button { border: 0; border-radius: 10px; padding: 9px 11px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 750; }
+.choice-card { width: 100%; text-align: left; margin-bottom: 10px; }
+.choice-card.selected { border-color: var(--rose); box-shadow: 0 0 0 2px var(--rose-soft); }
 .payment-card { display: flex; gap: 12px; align-items: center; }
 .radio { width: 20px; height: 20px; border: 6px solid var(--rose); border-radius: 50%; }
 
@@ -317,6 +322,15 @@ const defaultState = {
   subscription: false,
   selectedProductId: "hayati",
   catalogFilter: "Все",
+  profile: { name: "Артур", phone: "+7 999 123-45-67", email: "artur@example.test" },
+  addresses: [
+    { id: "home", label: "Дом", line: "Москва, ул. Примерная, 12, кв. 34", details: "Домофон 34" },
+    { id: "work", label: "Работа", line: "Москва, ул. Рабочая, 7", details: "" }
+  ],
+  selectedAddressId: "home",
+  deliveryMethod: "courier",
+  promoCode: "WELCOME10",
+  promoApplied: true,
   lastOrder: [{ id: "hayati", qty: 1 }],
   lastOrderTotal: 75410,
 };
@@ -325,12 +339,16 @@ try { storedState = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catc
 const prototypeState = { ...defaultState, ...storedState, history: [] };
 if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) prototypeState.cartItems = {};
 if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
+if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
+if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 const productById = (id) => products.find((item) => item.id === id) || products[0];
 const selectedProduct = () => productById(prototypeState.selectedProductId);
 const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => ({ item: productById(id), qty: Number(qty) || 0 })).filter(({ qty }) => qty > 0);
 const cartItemCount = () => cartEntries().reduce((sum, entry) => sum + entry.qty, 0);
 const cartGoodsMinor = () => cartEntries().reduce((sum, { item, qty }) => sum + item.price * qty, 0);
 const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
+const selectedAddress = () => prototypeState.addresses.find((item) => item.id === prototypeState.selectedAddressId) || prototypeState.addresses[0];
+const deliveryPriceMinor = () => prototypeState.deliveryMethod === "pickup" ? 25000 : 35000;
 const saveState = () => {
   const { history, ...persisted } = prototypeState;
   try { localStorage.setItem(storageKey, JSON.stringify(persisted)); } catch {}
@@ -338,9 +356,9 @@ const saveState = () => {
 const orderTotalMinor = () => {
   const goods = cartGoodsMinor();
   if (!goods) return 0;
-  const promo = Math.round(goods * 0.1);
+  const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
-  return goods - promo - points + 35000;
+  return goods - promo - points + deliveryPriceMinor();
 };
 
 const rub = (minor) => `${new Intl.NumberFormat("ru-RU").format(minor / 100)} ₽`;
@@ -378,15 +396,15 @@ const cart = () => {
   const entries = cartEntries();
   if (!entries.length) return cartEmpty();
   const goods = cartGoodsMinor();
-  const promo = Math.round(goods * 0.1);
+  const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
     ${entries.map(({ item, qty }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease" data-product-id="${item.id}" aria-label="Уменьшить ${item.name}">−</button><strong>${qty}</strong><button data-action="increase" data-product-id="${item.id}" aria-label="Увеличить ${item.name}">+</button></div></div><strong>${rub(item.price * qty)}</strong></div></div>`).join("")}
     <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать доступные баллы</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
-    <div class="field" style="margin-top:12px"><label>Промокод</label><strong>WELCOME10</strong></div>
-    <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>−${rub(promo)}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(35000)}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
+    <div class="field" style="margin-top:12px"><label>Промокод</label><div class="promo-row"><input id="promo-code" value="${prototypeState.promoCode || ""}" placeholder="Введите промокод" /><button data-action="promo">${prototypeState.promoApplied ? "Отменить" : "Применить"}</button></div></div>
+    <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>${promo ? `−${rub(promo)}` : "Не применён"}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(deliveryPriceMinor())}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
     <div class="fixed-action"><button class="primary" data-screen="checkout">Перейти к оформлению</button></div>
   </section>`;
 };
@@ -397,14 +415,17 @@ const favorites = () => { const items = products.filter((item) => isFavorite(ite
 
 const favoritesEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div></div><div class="state-panel"><div><div class="state-icon">♡</div><h2>Сохраняйте любимое</h2><p class="subtle">Нажмите на сердце в карточке аромата — он появится здесь.</p><button class="primary" style="padding:0 28px;width:auto">Найти аромат</button></div></div>${bottomNav("profile")}</section>`;
 
-const checkout = () => `<section class="screen with-action">
+const checkout = () => { const profile = prototypeState.profile; const address = selectedAddress(); return `<section class="screen with-action">
   <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Оформление</h1><span></span></div>
-  <h3>Получатель</h3><div class="field"><label>Имя и телефон</label><strong>Артур · +7 ••• •••-12-34</strong></div>
-  <h3 style="margin-top:22px">Доставка</h3><div class="field"><label>Адрес</label><strong>Москва, ул. Примерная, 12</strong></div><div class="field"><label>Способ</label><strong>Курьер · 1–2 дня · ${rub(35000)}</strong></div>
+  <h3>Получатель</h3><div class="field" data-screen="profile-edit"><label>Имя и телефон</label><strong>${profile.name} · ${profile.phone}</strong></div>
+  <h3 style="margin-top:22px">Адрес</h3><div class="field" data-screen="addresses"><label>${address.label}</label><strong>${address.line}</strong></div>
+  <h3 style="margin-top:22px">Способ доставки</h3>
+  <button class="card choice-card ${prototypeState.deliveryMethod === "courier" ? "selected" : ""}" data-action="delivery" data-delivery="courier"><div class="row between"><div><h3>Курьер СДЭК</h3><p class="subtle" style="margin:0">1–2 дня</p></div><strong>${rub(35000)}</strong></div></button>
+  <button class="card choice-card ${prototypeState.deliveryMethod === "pickup" ? "selected" : ""}" data-action="delivery" data-delivery="pickup"><div class="row between"><div><h3>Пункт выдачи СДЭК</h3><p class="subtle" style="margin:0">2–3 дня</p></div><strong>${rub(25000)}</strong></div></button>
   <h3 style="margin-top:22px">Оплата</h3><div class="card payment-card"><span class="radio"></span><div><h3>Банковская карта</h3><p class="subtle" style="margin:0">Тестовая успешная оплата</p></div></div>
   <div class="summary"><div class="row total"><span>К оплате</span><span>${rub(orderTotalMinor())}</span></div></div>
   <div class="fixed-action"><button class="primary rose" data-action="pay">Оплатить ${rub(orderTotalMinor())}</button></div>
-</section>`;
+</section>`; };
 
 const orders = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const count = entries.reduce((sum, entry) => sum + entry.qty, 0); const first = productById(entries[0]?.id); return `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
   <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">Сегодня · ${count} ${count === 1 ? "товар" : "товара"}</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px"><img src="${first.image}" alt="${first.name}" referrerpolicy="no-referrer" /></div></div><strong>${rub(prototypeState.lastOrderTotal || defaultState.lastOrderTotal)} ›</strong></div></article>
@@ -429,7 +450,7 @@ const loyalty = () => `<section class="screen"><div class="topline"><div><p clas
   <div class="section-head"><h2>История</h2><span>Все операции</span></div><div class="ledger"><div class="ledger-row"><div><h3>Заказ SIM-00001</h3><p class="subtle">Сегодня</p></div><strong class="minus">−500</strong></div><div class="ledger-row"><div><h3>Приветственные баллы</h3><p class="subtle">4 августа</p></div><strong class="plus">+1 000</strong></div></div>
   ${bottomNav("loyalty")}</section>`;
 
-const profile = () => `<section class="screen"><p class="eyebrow">Личный кабинет</p><h1>Профиль</h1><div class="row" style="margin-top:28px"><div class="avatar">А</div><div><h2 style="margin-bottom:5px">Артур</h2><p class="subtle">+7 ••• •••-12-34</p></div></div>
+const profile = () => `<section class="screen"><p class="eyebrow">Личный кабинет</p><h1>Профиль</h1><div class="row" style="margin-top:28px"><div class="avatar">${prototypeState.profile.name.trim().charAt(0).toUpperCase() || "P"}</div><div><h2 style="margin-bottom:5px">${prototypeState.profile.name}</h2><p class="subtle">${prototypeState.profile.phone}</p></div></div>
   <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
   ${bottomNav("profile")}</section>`;
 
@@ -437,9 +458,9 @@ const authPhone = () => `<section class="screen with-action" style="padding-top:
 
 const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><span></span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на +7 ••• •••-45-67</p><div class="row" style="justify-content:center;gap:10px">${[0,0,0,0].map(() => '<div class="field" style="width:58px;height:64px;display:grid;place-items:center;padding:0"><strong style="font-size:24px">0</strong></div>').join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Получить новый код через 00:42</p><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
 
-const profileEdit = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Личные данные</h1><span></span></div><div class="field"><label>Имя</label><strong>Артур</strong></div><div class="field"><label>Телефон</label><strong>+7 ••• •••-12-34</strong></div><div class="field"><label>Email</label><strong>artur@example.test</strong></div><div class="section-head"><h2>Уведомления</h2></div><div class="card"><div class="menu-row"><div><h3>Статусы заказов</h3><p class="subtle" style="margin:0">Важные push-уведомления</p></div><span class="switch"></span></div><div class="menu-row"><div><h3>Акции и новинки</h3><p class="subtle" style="margin:0">Только с вашего согласия</p></div><span class="switch" style="background:#c7c0b6"><span></span></span></div></div><div class="fixed-action"><button class="primary">Сохранить</button></div></section>`;
+const profileEdit = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Личные данные</h1><span></span></div><div class="field"><label>Имя</label><input id="profile-name" value="${prototypeState.profile.name}" /></div><div class="field"><label>Телефон</label><input id="profile-phone" value="${prototypeState.profile.phone}" inputmode="tel" /></div><div class="field"><label>Email</label><input id="profile-email" value="${prototypeState.profile.email}" inputmode="email" /></div><div class="section-head"><h2>Уведомления</h2></div><div class="card"><div class="menu-row"><div><h3>Статусы заказов</h3><p class="subtle" style="margin:0">Важные push-уведомления</p></div><span class="switch"></span></div><div class="menu-row"><div><h3>Акции и новинки</h3><p class="subtle" style="margin:0">Только с вашего согласия</p></div><span class="switch off"></span></div></div><div class="fixed-action"><button class="primary" data-action="save-profile">Сохранить</button></div></section>`;
 
-const addresses = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Адреса</h1><span></span></div><article class="card" style="border-color:#c99aa1"><div class="row between"><div><p class="eyebrow">Основной</p><h3>Дом</h3></div><span>•••</span></div><p class="subtle" style="margin:8px 0 0">Москва, ул. Примерная, 12, кв. 34<br>Домофон 34</p></article><article class="card" style="margin-top:12px"><div class="row between"><h3>Работа</h3><span>•••</span></div><p class="subtle" style="margin:8px 0 0">Москва, ул. Рабочая, 7</p></article><div class="fixed-action"><button class="primary rose">Добавить адрес</button></div></section>`;
+const addresses = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Адреса</h1><span></span></div>${prototypeState.addresses.map((address) => `<button class="card choice-card ${address.id === prototypeState.selectedAddressId ? "selected" : ""}" data-action="select-address" data-address-id="${address.id}"><div class="row between"><div><p class="eyebrow">${address.id === prototypeState.selectedAddressId ? "Выбран" : "Адрес"}</p><h3>${address.label}</h3></div><span>${address.id === prototypeState.selectedAddressId ? "✓" : "○"}</span></div><p class="subtle" style="margin:8px 0 0">${address.line}${address.details ? `<br>${address.details}` : ""}</p></button>`).join("")}<div class="section-head"><h2>Новый адрес</h2></div><div class="field"><label>Название</label><input id="new-address-label" placeholder="Например, Дача" /></div><div class="field"><label>Адрес</label><input id="new-address-line" placeholder="Город, улица, дом, квартира" /></div><button class="primary rose" data-action="add-address">Добавить адрес</button>${bottomNav("profile")}</section>`;
 
 const notifications = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div><span class="subtle">Прочитать все</span></div><div class="card" style="border-color:#c99aa1;margin-bottom:12px"><div class="row" style="align-items:flex-start"><span class="coin" style="width:38px;height:38px;flex:none">P</span><div><div class="row between"><h3>Баллы начислены</h3><span style="width:8px;height:8px;border-radius:50%;background:var(--rose)"></span></div><p class="subtle">+199 баллов за доставленный заказ SIM-00001</p><small class="subtle">сегодня, 17:42</small></div></div></div><div class="card" style="margin-bottom:12px"><div class="row" style="align-items:flex-start"><span class="state-icon" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">✓</span><div><h3>Заказ передан в доставку</h3><p class="subtle">Курьер привезёт заказ завтра</p><small class="subtle">вчера, 09:30</small></div></div></div><div class="card"><div class="row" style="align-items:flex-start"><span class="state-icon" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">◇</span><div><h3>Новая коллекция</h3><p class="subtle">Познакомьтесь с ароматами для тёплого вечера</p><small class="subtle">2 августа</small></div></div></div>${bottomNav("profile")}</section>`;
 
@@ -548,9 +569,60 @@ document.addEventListener("click", async (event) => {
     render("cart", { remember: false });
     return;
   }
+  if (action === "promo") {
+    if (prototypeState.promoApplied) {
+      prototypeState.promoApplied = false;
+      render("cart", { remember: false });
+      toast("Промокод отключён");
+      return;
+    }
+    const code = (document.querySelector("#promo-code")?.value || "").trim().toUpperCase();
+    if (code !== "WELCOME10") {
+      toast("Промокод не найден");
+      return;
+    }
+    prototypeState.promoCode = code;
+    prototypeState.promoApplied = true;
+    render("cart", { remember: false });
+    toast("Скидка 10% применена");
+    return;
+  }
+  if (action === "delivery") {
+    prototypeState.deliveryMethod = actionTarget.dataset.delivery || "courier";
+    render("checkout", { remember: false });
+    toast(prototypeState.deliveryMethod === "pickup" ? "Выбран пункт выдачи" : "Выбрана доставка курьером");
+    return;
+  }
+  if (action === "save-profile") {
+    const name = (document.querySelector("#profile-name")?.value || "").trim();
+    const phone = (document.querySelector("#profile-phone")?.value || "").trim();
+    const email = (document.querySelector("#profile-email")?.value || "").trim();
+    if (!name || !phone) { toast("Заполните имя и телефон"); return; }
+    prototypeState.profile = { name, phone, email };
+    render("profile");
+    toast("Личные данные сохранены");
+    return;
+  }
+  if (action === "select-address") {
+    prototypeState.selectedAddressId = actionTarget.dataset.addressId;
+    render("addresses", { remember: false });
+    toast("Адрес выбран");
+    return;
+  }
+  if (action === "add-address") {
+    const label = (document.querySelector("#new-address-label")?.value || "").trim();
+    const line = (document.querySelector("#new-address-line")?.value || "").trim();
+    if (!label || !line) { toast("Заполните название и адрес"); return; }
+    const id = `address-${Date.now()}`;
+    prototypeState.addresses = [...prototypeState.addresses, { id, label, line, details: "" }];
+    prototypeState.selectedAddressId = id;
+    render("addresses", { remember: false });
+    toast("Новый адрес добавлен");
+    return;
+  }
   if (action === "pay") {
     const goods = cartGoodsMinor();
-    const promo = Math.round(goods * 0.1);
+    const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
     const usedPointsMinor = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
     prototypeState.lastOrder = cartEntries().map(({ item, qty }) => ({ id: item.id, qty }));
     prototypeState.lastOrderTotal = orderTotalMinor();
