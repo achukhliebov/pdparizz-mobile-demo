@@ -301,9 +301,9 @@ const prototypeState = {
   history: [],
 };
 const orderTotalMinor = () => {
-  const goods = 249000 * Math.max(prototypeState.cartQty, 1);
+  const goods = 44900 * Math.max(prototypeState.cartQty, 1);
   const promo = Math.round(goods * 0.1);
-  const points = prototypeState.usePoints ? Math.min(prototypeState.points, 500) * 100 : 0;
+  const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   return goods - promo - points + 35000;
 };
 
@@ -316,7 +316,7 @@ const bottomNav = (active) => `<nav class="bottom-nav">
 
 const productCard = (number, name, price) => `<article class="product-card" data-screen="product" data-product-name="${name.toLowerCase()}">
   <div class="product-art">${bottle}<button class="heart" data-action="favorite" aria-label="В избранное">${prototypeState.favorite ? "♥" : "♡"}</button></div>
-  <div class="product-meta"><h3>${name}</h3><p>50 мл · стойкий аромат</p><div class="price">${rub(price)}</div></div>
+  <div class="product-meta"><h3>${name}</h3><p>15 мл · стойкий аромат</p><div class="price">${rub(price)}</div></div>
 </article>`;
 
 const catalog = () => `<section class="screen">
@@ -344,13 +344,13 @@ const product = () => `<section class="screen with-action">
 
 const cart = () => {
   if (prototypeState.cartQty < 1) return cartEmpty();
-  const goods = 249000 * prototypeState.cartQty;
+  const goods = 44900 * prototypeState.cartQty;
   const promo = Math.round(goods * 0.1);
-  const points = prototypeState.usePoints ? Math.min(prototypeState.points, 500) * 100 : 0;
+  const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
-    <div class="card"><div class="cart-line"><div class="thumb">${bottle}</div><div><h3>PdParizz №001</h3><p class="subtle">50 мл</p><div class="quantity"><button data-action="decrease">−</button><strong>${prototypeState.cartQty}</strong><button data-action="increase">+</button></div></div><strong>${rub(goods)}</strong></div></div>
+    <div class="card"><div class="cart-line"><div class="thumb">${bottle}</div><div><h3>Attar collection Hayati</h3><p class="subtle">15 мл</p><div class="quantity"><button data-action="decrease">−</button><strong>${prototypeState.cartQty}</strong><button data-action="increase">+</button></div></div><strong>${rub(goods)}</strong></div></div>
     <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать 500 баллов</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
     <div class="field" style="margin-top:12px"><label>Промокод</label><strong>WELCOME10</strong></div>
     <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>−${rub(promo)}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(35000)}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
@@ -374,14 +374,14 @@ const checkout = () => `<section class="screen with-action">
 </section>`;
 
 const orders = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
-  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">4 августа · 2 товара</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px">${bottle}</div></div><strong>${rub(433200)} ›</strong></div></article>
+  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">Сегодня · 1 товар</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px">${bottle}</div></div><strong>${rub(orderTotalMinor())} ›</strong></div></article>
   <article class="card order-card" data-screen="order-delivered"><div class="row between"><span class="order-number">SIM-00000</span><span class="status">Доставлен</span></div><p class="subtle">17 июля · 1 товар</p><div class="row between"><div class="thumb" style="width:48px;height:56px">${bottle}</div><strong>${rub(229000)} ›</strong></div></article>
   ${bottomNav("orders")}</section>`;
 
 const order = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
   <div class="card"><div class="row between"><span class="subtle">Ожидаемая доставка</span><strong>6 августа</strong></div></div>
   <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Собираем заказ</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item"><h3>Передадим в доставку</h3><p class="subtle">Ожидается завтра</p></div><div class="timeline-item"><h3>Заказ доставлен</h3></div></div>
-  <div class="card"><div class="cart-line" style="padding-top:0"><div class="thumb">${bottle}</div><div><h3>PdParizz №001</h3><p class="subtle">2 × ${rub(249000)}</p></div><strong>${rub(498000)}</strong></div><div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(433200)}</span></div></div></div>
+  <div class="card"><div class="cart-line" style="padding-top:0"><div class="thumb">${bottle}</div><div><h3>Attar collection Hayati</h3><p class="subtle">1 × ${rub(44900)}</p></div><strong>${rub(44900)}</strong></div><div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(orderTotalMinor())}</span></div></div></div>
 </section>`;
 
 const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
