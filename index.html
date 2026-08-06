@@ -392,7 +392,7 @@ const scenarios = [
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
   ["push-demo", "Push · сценарии"], ["attribution", "Атрибуция"],
   ["referral", "Рефералы"], ["referral-landing", "Реферал · приглашение"], ["referral-rules", "Реферал · правила"], ["referral-success", "Реферал · награда"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-rules", "Колесо · правила"], ["wheel-result", "Колесо · результат"],
-  ["install", "Установка"], ["analytics", "Аналитика"], ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
+  ["install", "Установка"], ["analytics", "Аналитика"], ["data-sync", "Контур данных"], ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
   ["catalog-loading", "Loading"], ["catalog-empty", "Empty"], ["catalog-error", "Error"]
 ];
 
@@ -475,6 +475,12 @@ const defaultState = {
     { id: "invite-new", name: "Новый переход", stage: "clicked", label: "Ещё не зарегистрирован", date: "Сегодня" }
   ],
   analyticsEvents: [],
+  analyticsConsent: true,
+  syncQueue: [],
+  syncedEventCount: 0,
+  lastSyncAt: null,
+  syncStatus: "idle",
+  syncAuditCompleted: false,
   pendingPurchaseOrigin: "acquisition",
   completedOrderCount: 0,
   onboardingStep: 0,
@@ -521,6 +527,7 @@ if (!Array.isArray(prototypeState.recentlyViewedProductIds)) prototypeState.rece
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
+if (!Array.isArray(prototypeState.syncQueue)) prototypeState.syncQueue = [];
 if (!Array.isArray(prototypeState.claimedOfferIds)) prototypeState.claimedOfferIds = [];
 if (!Array.isArray(prototypeState.notificationFeed)) prototypeState.notificationFeed = [...defaultState.notificationFeed];
 if (!Array.isArray(prototypeState.supportMessages)) prototypeState.supportMessages = [...defaultState.supportMessages];
@@ -679,8 +686,14 @@ const eventLabels = {
 };
 const track = (name, data = {}) => {
   const attributionContext = prototypeState.attribution || defaultState.attribution;
-  prototypeState.analyticsEvents.unshift({ name, data: { source: attributionContext.source, campaign: attributionContext.campaign, session: prototypeState.attributionSessionId, ...data }, at: Date.now() });
+  const at = Date.now();
+  const enrichedData = { source: attributionContext.source, campaign: attributionContext.campaign, session: prototypeState.attributionSessionId, ...data };
+  prototypeState.analyticsEvents.unshift({ name, data: enrichedData, at });
   prototypeState.analyticsEvents = prototypeState.analyticsEvents.slice(0, 50);
+  if (prototypeState.analyticsConsent !== false) {
+    prototypeState.syncQueue.push({ id: `evt-${at}-${Math.random().toString(36).slice(2,7)}`, event: name, occurred_at: new Date(at).toISOString(), anonymous_id: prototypeState.attributionSessionId, source: attributionContext.source, campaign: attributionContext.campaign, payload: data });
+    prototypeState.syncQueue = prototypeState.syncQueue.slice(-100);
+  }
 };
 const onboardingSlides = [
   { symbol: "P", eyebrow: "Добро пожаловать", title: "Ароматы, которые хочется носить", body: "Реальные позиции PdParizz, избранное и быстрый заказ — в одном месте." },
@@ -912,27 +925,36 @@ const analytics = () => {
   return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Сквозная аналитика</p><h1>Воронка продаж</h1></div><span class="subtle">${events.length}/50</span></div><div class="card" style="background:#24201d;color:#fff;border:0"><p class="eyebrow" style="color:#d9b46a">${prototypeState.attribution?.source || "Прямой переход"} · ${prototypeState.attribution?.campaign || "—"}</p><div class="row between" style="align-items:flex-end"><div><p class="subtle" style="color:#cfc7bf;margin:0">Этапов пройдено</p><h2 style="font-size:34px;margin:4px 0 0">${reached}/6</h2></div><div style="text-align:right"><p class="subtle" style="color:#cfc7bf;margin:0">Переход → заказ</p><h2 style="font-size:34px;margin:4px 0 0">${conversion}%</h2></div></div></div><div class="section-head"><h2>Путь покупателя</h2><button class="chip" data-action="run-funnel-demo">Показать демо</button></div><div class="card">${stages.map(([label, done, note], index) => `<div class="funnel-row ${done ? "done" : ""}"><span class="funnel-step">${done ? "✓" : index + 1}</span><div><strong>${label}</strong><p class="subtle" style="margin:2px 0 0">${note}</p><div class="funnel-track"><div class="funnel-fill" style="width:${done ? Math.max(18, 100 - index * 13) : 0}%"></div></div></div><span class="funnel-rate">${done ? "Есть" : "—"}</span></div>`).join("")}</div><div class="section-head"><h2>Последние действия</h2><button class="chip" data-action="clear-analytics">Очистить</button></div><div class="card">${events.length ? events.slice(0,10).map((event) => `<div class="event-row"><div class="row between"><strong>${eventLabels[event.name] || event.name}</strong><time>${new Date(event.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div><p class="subtle" style="margin:4px 0 0">${[event.data?.product || event.data?.target || event.data?.order || event.data?.source, event.data?.journey, event.data?.total].filter(Boolean).join(" · ") || "PdParizz MVP"}</p></div>`).join("") : `<p class="subtle" style="margin:0">Пройдите путь покупателя или запустите демо-воронку.</p>`}</div><p class="subtle" style="margin-top:16px">В MVP события и рекламный источник хранятся только на устройстве, без имени и телефона.</p></section>`;
 };
 
+const dataSync = () => {
+  const queued = prototypeState.syncQueue.length;
+  const syncedAt = prototypeState.lastSyncAt ? new Date(prototypeState.lastSyncAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "Ещё не выполнялась";
+  const ready = prototypeState.syncAuditCompleted;
+  const statusLabel = prototypeState.syncStatus === "checking" ? "Проверяем…" : prototypeState.syncStatus === "success" ? "Контур готов" : "Демо-режим";
+  return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Подготовка к API</p><h1>Контур данных</h1></div><span class="subtle">${statusLabel}</span></div><div class="card" style="background:#24201d;color:#fff;border:0"><div class="row between"><div><p class="subtle" style="color:#cfc7bf;margin:0">Ожидают отправки</p><h2 style="font-size:34px;margin:4px 0 0">${queued}</h2></div><div style="text-align:right"><p class="subtle" style="color:#cfc7bf;margin:0">Передано ранее</p><h2 style="font-size:34px;margin:4px 0 0">${prototypeState.syncedEventCount || 0}</h2></div></div><p class="subtle" style="color:#cfc7bf;margin:16px 0 0">Последняя синхронизация: ${syncedAt}</p></div><div class="section-head"><h2>Готовность модулей</h2></div><div class="card">${[["Каталог","Карточки, цены и остатки"],["Заказы","Создание и статусы"],["Лояльность","Баланс и операции"],["Аналитика","События без персональных данных"]].map(([title,body]) => `<div class="install-step"><span class="step-number" style="background:${ready ? "#e7f3ec" : "#eee9e2"};color:${ready ? "var(--success)" : "var(--muted)"}">${ready ? "✓" : "•"}</span><div><h3>${title}</h3><p class="subtle" style="margin:0">${body} · ${ready ? "интерфейс проверен" : "ожидает проверки"}</p></div></div>`).join("")}</div><div class="section-head"><h2>Приватность</h2></div><button class="card" data-action="toggle-analytics-consent" style="width:100%;text-align:left"><div class="row between"><div><h3>Обезличенная аналитика</h3><p class="subtle" style="margin:0">${prototypeState.analyticsConsent !== false ? "События помещаются в очередь" : "Сбор событий остановлен"}</p></div><span class="switch ${prototypeState.analyticsConsent !== false ? "" : "off"}"><i></i></span></div></button><button class="primary rose" data-action="sync-data" style="margin-top:18px" ${prototypeState.syncStatus === "checking" || prototypeState.analyticsConsent === false ? "disabled" : ""}>${prototypeState.syncStatus === "checking" ? "Проверяем контур…" : "Проверить и синхронизировать"}</button><button class="chip" data-screen="analytics" style="width:100%;margin-top:12px">Вернуться к воронке</button><p class="subtle" style="margin-top:16px">Сейчас отправка имитируется локально. После подключения PdParizz API очередь начнёт уходить на сервер без изменений экранов и сценариев.</p></section>`;
+};
+
 const privacy = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Конфиденциальность</h1><span></span></div><h2>Как используются данные</h2><p class="subtle">MVP хранит данные профиля и покупок только для работы личного кабинета.</p>${[["Что сохраняем","Номер телефона, имя, email, адреса, заказы, баллы и настройки уведомлений."],["Аналитика","Только обезличенные события без содержимого полей и номера телефона."],["Push-уведомления","Разрешение запрашивается после вашего согласия."],["Удаление данных","Выход очищает локальную сессию. Полное удаление появится после подключения API."]].map(([title,body]) => `<div class="card" style="margin-top:12px"><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div>`).join("")}<p class="subtle" style="margin-top:18px">Версия для MVP · 4 августа 2026</p></section>`;
 const offline = () => `<section class="screen">${catalog().replace('<section class="screen">','').replace('</section>','')}</section><div class="offline-banner">Нет сети · показываем сохранённые данные</div>`;
 
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
 const auditNav = document.querySelector("#audit-nav");
 
-function render(next = screen, { remember = true } = {}) {
+function render(next = screen, { remember = true, trackView = true } = {}) {
   if (remember && next !== screen) prototypeState.history.push(screen);
   screen = renderers[next] ? next : "catalog";
-  track("screen_view", { screen });
+  if (trackView) track("screen_view", { screen });
   app.innerHTML = renderers[screen]();
   app.scrollTop = 0;
   scenarioLabel.textContent = `390 × 844 · ${screen} · интерактивный режим`;
   auditNav.innerHTML = scenarios.map(([id, label]) => `<a class="${id === screen ? "active" : ""}" href="?screen=${id}" data-screen="${id}">${label}</a>`).join("");
   if (screen === "catalog") applyCatalogFilters();
+  if (screen === "analytics") app.querySelector(".screen > p:last-child")?.insertAdjacentHTML("beforebegin", `<button class="chip" data-screen="data-sync" style="width:100%;margin-top:14px">Открыть контур данных</button>`);
   saveState();
 }
 
@@ -1601,6 +1623,29 @@ document.addEventListener("click", async (event) => {
     } else {
       toast(isIOS() ? "Safari → Поделиться → На экран Домой" : "Откройте меню браузера → Установить приложение");
     }
+    return;
+  }
+  if (action === "toggle-analytics-consent") {
+    prototypeState.analyticsConsent = prototypeState.analyticsConsent === false;
+    if (prototypeState.analyticsConsent === false) prototypeState.syncQueue = [];
+    prototypeState.syncStatus = "idle";
+    render("data-sync", { remember: false, trackView: false });
+    toast(prototypeState.analyticsConsent ? "Обезличенная аналитика включена" : "Сбор аналитики остановлен");
+    return;
+  }
+  if (action === "sync-data") {
+    if (prototypeState.analyticsConsent === false) { toast("Сначала разрешите обезличенную аналитику"); return; }
+    prototypeState.syncStatus = "checking";
+    render("data-sync", { remember: false, trackView: false });
+    setTimeout(() => {
+      prototypeState.syncedEventCount = (Number(prototypeState.syncedEventCount) || 0) + prototypeState.syncQueue.length;
+      prototypeState.syncQueue = [];
+      prototypeState.lastSyncAt = new Date().toISOString();
+      prototypeState.syncStatus = "success";
+      prototypeState.syncAuditCompleted = true;
+      render("data-sync", { remember: false, trackView: false });
+      toast("Демо-синхронизация завершена");
+    }, 700);
     return;
   }
   if (action === "run-funnel-demo") {
