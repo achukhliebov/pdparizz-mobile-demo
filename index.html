@@ -303,13 +303,24 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .wheel-wrap { display: grid; place-items: center; margin: 30px 0; position: relative; }
 .wheel {
   width: 272px; height: 272px; border-radius: 50%; border: 10px solid #fff8e8;
-  background: conic-gradient(#a55461 0 25%, #d8aa55 0 50%, #49382e 0 75%, #d9b6bb 0);
+  background: conic-gradient(#a55461 0 16.666%, #d8aa55 0 33.333%, #49382e 0 50%, #bd7b84 0 66.666%, #8e6a2c 0 83.333%, #6b5243 0);
   box-shadow: 0 16px 38px rgba(61,43,31,.22), inset 0 0 0 2px rgba(50,30,20,.15);
   position: relative;
 }
 .wheel::before { content: ""; position: absolute; inset: 87px; border-radius: 50%; background: var(--surface); box-shadow: 0 5px 15px rgba(0,0,0,.15); }
 .wheel::after { content: "P"; position: absolute; inset: 0; display: grid; place-items: center; font: 32px Georgia, serif; color: var(--rose); }
 .wheel-pointer { position: absolute; top: -7px; width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 28px solid var(--ink); z-index: 2; }
+.wheel-label { position:absolute; left:50%; top:50%; width:58px; margin:-8px 0 0 -29px; text-align:center; color:#fff; font-size:9px; font-weight:850; line-height:1.1; text-shadow:0 1px 3px rgba(0,0,0,.4); z-index:1; }
+.wheel-label:nth-child(1) { transform:rotate(30deg) translateY(-104px) rotate(-30deg); }
+.wheel-label:nth-child(2) { transform:rotate(90deg) translateY(-104px) rotate(-90deg); }
+.wheel-label:nth-child(3) { transform:rotate(150deg) translateY(-104px) rotate(-150deg); }
+.wheel-label:nth-child(4) { transform:rotate(210deg) translateY(-104px) rotate(-210deg); }
+.wheel-label:nth-child(5) { transform:rotate(270deg) translateY(-104px) rotate(-270deg); }
+.wheel-label:nth-child(6) { transform:rotate(330deg) translateY(-104px) rotate(-330deg); }
+.prize-list { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.prize-chip { padding:11px 12px; border:1px solid var(--line); border-radius:13px; background:var(--surface); }
+.prize-chip strong { display:block; font-size:12px; }
+.prize-chip span { color:var(--muted); font-size:10px; }
 
 .avatar { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; background: var(--rose-soft); color: var(--rose); font: 28px Georgia, serif; }
 .menu { margin-top: 22px; }
@@ -321,8 +332,8 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .skeleton.line { height: 14px; margin: 9px 0; }
 .skeleton.tile { height: 210px; }
 @keyframes shimmer { to { background-position: -150% 0; } }
-@keyframes wheel-spin { from { transform: rotate(0deg); } to { transform: rotate(1110deg); } }
-.wheel.spinning { animation: wheel-spin 1.25s cubic-bezier(.12,.67,.18,1) forwards; }
+@keyframes wheel-spin { from { transform: rotate(0deg); } to { transform: rotate(var(--wheel-target, 1470deg)); } }
+.wheel.spinning { animation: wheel-spin 1.45s cubic-bezier(.12,.67,.18,1) forwards; }
 
 .prototype-toast {
   position: absolute; left: 22px; right: 22px; bottom: 92px; z-index: 30;
@@ -372,7 +383,7 @@ const scenarios = [
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
   ["loyalty", "Лояльность"], ["loyalty-rules", "Правила лояльности"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
-  ["referral", "Рефералы"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-result", "Колесо · результат"],
+  ["referral", "Рефералы"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-rules", "Колесо · правила"], ["wheel-result", "Колесо · результат"],
   ["install", "Установка"], ["analytics", "Аналитика"], ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
   ["catalog-loading", "Loading"], ["catalog-empty", "Empty"], ["catalog-error", "Error"]
 ];
@@ -437,6 +448,10 @@ const defaultState = {
     { id: "collection-1", type: "marketing", title: "Новая коллекция", body: "Познакомьтесь с ароматами для тёплого вечера", time: "2 августа", read: true, screen: "catalog" }
   ],
   lastWheelSpinDate: "",
+  lastWheelPrizeId: "",
+  lastWheelPrizeExpiresAt: null,
+  wheelRewardApplied: false,
+  wheelSpinStatus: "idle",
   referralCode: "",
   referralRewardPending: false,
   referralRewardClaimed: false,
@@ -561,7 +576,35 @@ const loyaltyTiers = [
 const loyaltyTier = () => [...loyaltyTiers].reverse().find((item) => prototypeState.lifetimeSpendMinor >= item.min) || loyaltyTiers[0];
 const loyaltyProgress = () => { const tier = loyaltyTier(); if (!tier.next) return 100; return Math.max(0, Math.min(100, ((prototypeState.lifetimeSpendMinor - tier.min) / (tier.next - tier.min)) * 100)); };
 const todayKey = () => new Date().toLocaleDateString("sv-SE");
-const canSpinToday = () => prototypeState.lastWheelSpinDate !== todayKey();
+const wheelDemoMode = params.get("demo") === "wheel";
+const wheelPrizes = [
+  { id: "points50", short: "50 P", title: "+50 баллов", body: "Баллы уже доступны в вашем кошельке.", type: "points", value: 50, chance: 34, symbol: "P" },
+  { id: "points100", short: "100 P", title: "+100 баллов", body: "Баллы уже доступны в вашем кошельке.", type: "points", value: 100, chance: 28, symbol: "P" },
+  { id: "shipping", short: "Доставка", title: "Бесплатная доставка", body: "Применим автоматически к следующему заказу.", type: "shipping", value: 1, chance: 15, symbol: "✓" },
+  { id: "points300", short: "300 P", title: "+300 баллов", body: "Баллы уже доступны в вашем кошельке.", type: "points", value: 300, chance: 10, symbol: "P" },
+  { id: "discount10", short: "−10%", title: "Скидка 10%", body: "Промокод WHEEL10 уже добавлен в корзину.", type: "discount", value: 10, chance: 10, symbol: "%" },
+  { id: "points500", short: "500 P", title: "+500 баллов", body: "Главный балльный приз уже в кошельке.", type: "points", value: 500, chance: 3, symbol: "★" }
+];
+const canSpinToday = () => wheelDemoMode || prototypeState.lastWheelSpinDate !== todayKey();
+const lastWheelPrize = () => wheelPrizes.find((prize) => prize.id === prototypeState.lastWheelPrizeId) || wheelPrizes[1];
+const chooseWheelPrize = () => { let roll = Math.random() * 100; for (const prize of wheelPrizes) { roll -= prize.chance; if (roll < 0) return prize; } return wheelPrizes[0]; };
+const applyWheelPrize = (prize) => {
+  if (prototypeState.wheelRewardApplied) return;
+  if (prize.type === "points") {
+    prototypeState.points += prize.value;
+    addLoyaltyOperation({ title: "Колесо подарков", points: prize.value });
+  } else if (prize.type === "shipping") {
+    if (!prototypeState.claimedOfferIds.includes("shipping")) prototypeState.claimedOfferIds = [...prototypeState.claimedOfferIds, "shipping"];
+    prototypeState.lastWheelPrizeExpiresAt = dateAfterDays(7).toISOString();
+  } else if (prize.type === "discount") {
+    prototypeState.promoCode = "WHEEL10";
+    prototypeState.promoApplied = true;
+    prototypeState.lastWheelPrizeExpiresAt = dateAfterDays(7).toISOString();
+  }
+  prototypeState.wheelRewardApplied = true;
+  addNotification({ type: prize.type === "points" ? "points" : "marketing", title: `Колесо: ${prize.title}`, body: prize.body, screen: prize.type === "points" ? "loyalty" : "cart" });
+  track("wheel_reward", { prize: prize.id, type: prize.type, value: prize.value, chance: `${prize.chance}%` });
+};
 const subscriptionPlanName = () => prototypeState.subscriptionPlan === "monthly" ? "Месяц" : "Год";
 const subscriptionPrice = () => prototypeState.subscriptionPlan === "monthly" ? "399 ₽" : "2 990 ₽";
 const dateAfterDays = (days) => { const date = new Date(); date.setDate(date.getDate() + days); return date; };
@@ -783,9 +826,11 @@ const subscriptionSuccess = () => `<section class="screen"><div class="state-pan
 
 const subscriptionCancel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">PdParizz Club</p><h1>Отмена подписки</h1></div><span></span></div><p class="subtle" style="margin:-6px 0 20px">Подскажите причину — это поможет сделать клуб полезнее.</p>${[["too-expensive","Дорого"],["rarely-order","Редко заказываю"],["not-useful","Не вижу пользы"]].map(([id,label]) => `<button class="card choice-card ${prototypeState.subscriptionCancelReason === id ? "selected" : ""}" data-action="subscription-cancel-reason" data-reason="${id}" style="width:100%;text-align:left;margin-bottom:10px"><div class="row between"><strong>${label}</strong><span>${prototypeState.subscriptionCancelReason === id ? "✓" : "○"}</span></div></button>`).join("")}<div class="card" style="margin-top:18px;background:#fffaf0;border-color:#d6b56d"><h3>Вы ничего не потеряете сегодня</h3><p class="subtle" style="margin:0">Преимущества сохранятся до ${subscriptionAccessUntil()}, затем подписка завершится автоматически.</p></div><div class="fixed-action"><button class="primary" data-action="confirm-subscription-cancel">Отключить автопродление</button></div></section>`;
 
-const wheel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ежедневный подарок</p><span>?</span></div><h1 style="text-align:center">Колесо PdParizz</h1><p class="subtle" style="text-align:center">Одна попытка в день. Результат определяет сервер.</p><div class="wheel-wrap"><span class="wheel-pointer"></span><div class="wheel"></div></div><p class="subtle" style="text-align:center">${canSpinToday() ? "Сегодня доступна 1 попытка" : "Сегодняшний подарок уже получен"}</p><div class="fixed-action"><button class="primary ${canSpinToday() ? "rose" : ""}" data-action="spin" ${canSpinToday() ? "" : "disabled"}>${canSpinToday() ? "Крутить колесо" : "Попробуйте завтра"}</button></div></section>`;
+const wheel = () => { const used = !canSpinToday(); const prize = lastWheelPrize(); return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ежедневный подарок</p><button class="icon-btn" data-screen="wheel-rules" aria-label="Правила колеса">?</button></div><h1 style="text-align:center">Колесо PdParizz</h1><p class="subtle" style="text-align:center">Одна попытка в день. Приз фиксируется до запуска анимации.</p><div class="wheel-wrap"><span class="wheel-pointer"></span><div class="wheel">${wheelPrizes.map((item) => `<span class="wheel-label">${item.short}</span>`).join("")}</div></div>${used ? `<button class="card" data-screen="wheel-result" style="width:100%;text-align:left;border-color:#d6b56d;background:#fffaf0"><div class="row between"><div><p class="eyebrow">Сегодня выиграли</p><h3>${prize.title}</h3><p class="subtle" style="margin:0">Посмотреть подарок</p></div><strong>›</strong></div></button>` : `<p class="subtle" style="text-align:center">Сегодня доступна 1 попытка</p>`}<div class="fixed-action"><button class="primary ${canSpinToday() ? "rose" : ""}" data-action="spin" ${canSpinToday() ? "" : "disabled"}>${canSpinToday() ? "Крутить колесо" : "Новая попытка завтра"}</button></div></section>`; };
 
-const wheelResult = () => `<section class="screen"><div class="state-panel"><div><div class="state-icon" style="width:92px;height:92px;font-size:36px;background:#fff1cf;color:#9a742d">P</div><p class="eyebrow">Поздравляем</p><h1 style="font-size:42px">+100 баллов</h1><p class="subtle" style="margin:16px 0 28px">Баллы уже в вашем кошельке. Следующая попытка будет доступна завтра.</p><button class="primary rose" style="padding:0 28px;width:auto">Выбрать аромат</button><p class="subtle" style="margin-top:20px">Правила wheel-sim-v1</p></div></div></section>`;
+const wheelRules = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Прозрачные правила</p><h1>Призы колеса</h1></div><span></span></div><p class="subtle">Вероятности ниже используются в демонстрационном MVP. В рабочем приложении результат будет рассчитываться и подписываться сервером.</p><div class="prize-list">${wheelPrizes.map((prize) => `<div class="prize-chip"><strong>${prize.title}</strong><span>Вероятность ${prize.chance}%</span></div>`).join("")}</div><div class="section-head"><h2>Как это работает</h2></div><div class="card"><div class="install-step"><span class="step-number">1</span><div><h3>Одна попытка в сутки</h3><p class="subtle" style="margin:0">Повторный запуск с другого устройства не даст второй приз.</p></div></div><div class="install-step"><span class="step-number">2</span><div><h3>Сначала результат, потом анимация</h3><p class="subtle" style="margin:0">Колесо только показывает уже зафиксированный сервером выигрыш.</p></div></div><div class="install-step"><span class="step-number">3</span><div><h3>Приз применяется один раз</h3><p class="subtle" style="margin:0">Баллы попадают в историю, скидки и доставка — в следующий заказ.</p></div></div></div><p class="subtle" style="margin-top:16px">Скидка и бесплатная доставка действуют 7 дней. Призы не обмениваются на деньги.</p></section>`;
+
+const wheelResult = () => { const prize = lastWheelPrize(); const expires = prototypeState.lastWheelPrizeExpiresAt ? dateLabel(prototypeState.lastWheelPrizeExpiresAt, 7) : ""; return `<section class="screen"><div class="state-panel"><div><div class="state-icon" style="width:92px;height:92px;font-size:36px;background:#fff1cf;color:#9a742d">${prize.symbol}</div><p class="eyebrow">Поздравляем</p><h1 style="font-size:40px">${prize.title}</h1><p class="subtle" style="margin:16px auto 24px;max-width:290px">${prize.body}${expires ? ` Используйте до ${expires}.` : ""}</p><div class="card" style="text-align:left"><div class="row between"><span class="subtle">Статус</span><strong class="plus">Активирован ✓</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Следующая попытка</span><strong>Завтра</strong></div></div><button class="primary rose" data-screen="${prize.type === "points" ? "loyalty" : "catalog"}" style="margin-top:18px">${prize.type === "points" ? "Посмотреть баланс" : "Выбрать аромат"}</button><button class="chip" data-screen="wheel-rules" style="margin-top:12px">Правила и вероятности</button></div></div></section>`; };
 
 const install = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Быстрый доступ</p><span></span></div><div class="row" style="align-items:flex-start;margin-bottom:26px"><div class="install-logo">P</div><div><h1 style="font-size:34px">PdParizz на телефоне</h1><p class="subtle" style="margin:10px 0 0">Открывается как обычное приложение и сохраняет каталог для повторного запуска.</p></div></div>${isStandalone() ? `<div class="card loyalty-toggle"><div class="row"><span class="state-icon" style="width:42px;height:42px;margin:0;font-size:17px">✓</span><div><h3>Приложение установлено</h3><p class="subtle" style="margin:0">Запускайте PdParizz с домашнего экрана.</p></div></div></div>` : `<div class="card"><div class="install-step"><span class="step-number">1</span><div><h3>Откройте ссылку в Safari</h3><p class="subtle" style="margin:0">Для iPhone установка выполняется из Safari.</p></div></div><div class="install-step"><span class="step-number">2</span><div><h3>Нажмите «Поделиться»</h3><p class="subtle" style="margin:0">Кнопка с квадратом и стрелкой находится в панели браузера.</p></div></div><div class="install-step"><span class="step-number">3</span><div><h3>Выберите «На экран Домой»</h3><p class="subtle" style="margin:0">Подтвердите название PdParizz кнопкой «Добавить».</p></div></div></div>`}<div class="section-head"><h2>Что уже работает</h2></div><div class="card"><div class="row between"><span>Запуск без адресной строки</span><strong>✓</strong></div><div class="row between" style="margin-top:14px"><span>Каталог при слабой сети</span><strong>✓</strong></div><div class="row between" style="margin-top:14px"><span>Deep links и рефералы</span><strong>✓</strong></div></div><div class="fixed-action"><button class="primary rose" data-action="install-app" ${isStandalone() ? "disabled" : ""}>${isStandalone() ? "Уже установлено" : isIOS() ? "Понятно, установить в Safari" : "Установить приложение"}</button></div></section>`;
 
@@ -797,7 +842,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1062,7 +1107,7 @@ document.addEventListener("click", async (event) => {
       return;
     }
     const code = (document.querySelector("#promo-code")?.value || "").trim().toUpperCase();
-    if (!["WELCOME10", "PARIZZ15"].includes(code)) {
+    if (!["WELCOME10", "PARIZZ15", "WHEEL10"].includes(code)) {
       toast("Промокод не найден");
       return;
     }
@@ -1370,16 +1415,22 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "spin") {
     if (!canSpinToday()) { toast("Следующая попытка будет доступна завтра"); return; }
+    const prize = wheelDemoMode ? wheelPrizes[1] : chooseWheelPrize();
+    const prizeIndex = wheelPrizes.findIndex((item) => item.id === prize.id);
+    prototypeState.lastWheelPrizeId = prize.id;
+    prototypeState.wheelRewardApplied = false;
+    prototypeState.wheelSpinStatus = "spinning";
     actionTarget.disabled = true;
-    actionTarget.textContent = "Определяем подарок…";
-    document.querySelector(".wheel")?.classList.add("spinning");
+    actionTarget.textContent = "Подарок определён…";
+    const wheelElement = document.querySelector(".wheel");
+    wheelElement?.style.setProperty("--wheel-target", `${1770 - prizeIndex * 60}deg`);
+    wheelElement?.classList.add("spinning");
     setTimeout(() => {
       prototypeState.lastWheelSpinDate = todayKey();
-      prototypeState.points += 100;
-      addLoyaltyOperation({ title: "Колесо подарков", points: 100 });
-      track("wheel_reward", { points: 100 });
+      prototypeState.wheelSpinStatus = "complete";
+      applyWheelPrize(prize);
       render("wheel-result");
-    }, 1300);
+    }, 1500);
     return;
   }
   if (action === "install-app") {
