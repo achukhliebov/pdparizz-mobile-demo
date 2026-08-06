@@ -264,6 +264,10 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .timeline-item.done::before { border-color: var(--success); background: var(--success); }
 .timeline-item:last-child { border-left-color: transparent; }
 .timeline-item h3 { margin-bottom: 3px; font-size: 13px; }
+.notification-card { width: 100%; text-align: left; margin-bottom: 12px; }
+.notification-card.unread { border-color: #c99aa1; background: #fff8f8; }
+.notification-card .notification-copy { flex: 1; min-width: 0; }
+.notification-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--rose); }
 
 .loyalty-hero { padding: 22px; border-radius: 24px; color: #fff; background: linear-gradient(135deg, #24201d, #5c4a3b); overflow: hidden; position: relative; }
 .loyalty-hero::after { content: "P"; position: absolute; right: 12px; top: -34px; font: 150px Georgia, serif; color: rgba(255,255,255,.06); }
@@ -381,6 +385,13 @@ const defaultState = {
   loginPhone: "+7 999 123-45-67",
   pushOrders: true,
   pushMarketing: false,
+  orderStatus: "assembling",
+  orderRewarded: false,
+  notificationFeed: [
+    { id: "points-1", type: "points", title: "Баллы начислены", body: "+199 баллов за доставленный заказ SIM-00000", time: "сегодня, 17:42", read: false, screen: "loyalty" },
+    { id: "shipping-1", type: "order", title: "Заказ передан в доставку", body: "Курьер привезёт заказ завтра", time: "вчера, 09:30", read: false, screen: "order" },
+    { id: "collection-1", type: "marketing", title: "Новая коллекция", body: "Познакомьтесь с ароматами для тёплого вечера", time: "2 августа", read: true, screen: "catalog" }
+  ],
   lastWheelSpinDate: "",
   referralCode: "",
   referralRewardPending: false,
@@ -426,6 +437,7 @@ if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile 
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
 if (!Array.isArray(prototypeState.claimedOfferIds)) prototypeState.claimedOfferIds = [];
+if (!Array.isArray(prototypeState.notificationFeed)) prototypeState.notificationFeed = [...defaultState.notificationFeed];
 if (params.get("welcome") === "1") {
   screen = "onboarding";
   prototypeState.onboardingStep = 0;
@@ -461,6 +473,18 @@ const deliveryDates = [["tomorrow", "Завтра", "7 августа"], ["aug8"
 const deliveryDateLabel = () => { const item = deliveryDates.find(([id]) => id === prototypeState.deliveryDate) || deliveryDates[0]; return `${item[1]}, ${item[2]}`; };
 const paymentLabels = { card: "Банковская карта", sbp: "СБП", sberpay: "SberPay" };
 const deliveryPriceMinor = () => prototypeState.claimedOfferIds.includes("shipping") ? 0 : prototypeState.deliveryMethod === "pickup" ? 25000 : 35000;
+const orderStages = [
+  { id: "confirmed", label: "Подтверждён", title: "Заказ подтверждён", body: "Оплата получена" },
+  { id: "assembling", label: "Собираем", title: "Собираем заказ", body: "Флаконы готовятся к отправке" },
+  { id: "shipping", label: "В пути", title: "Передан в доставку", body: "Курьер СДЭК уже в пути" },
+  { id: "delivered", label: "Доставлен", title: "Заказ доставлен", body: "Спасибо за покупку" }
+];
+const currentOrderStage = () => orderStages.find((item) => item.id === prototypeState.orderStatus) || orderStages[1];
+const orderStatusIndex = () => Math.max(0, orderStages.findIndex((item) => item.id === currentOrderStage().id));
+const unreadNotifications = () => prototypeState.notificationFeed.filter((item) => !item.read).length;
+const addNotification = ({ type = "order", title, body, screen: targetScreen = "order" }) => {
+  prototypeState.notificationFeed.unshift({ id: `notification-${Date.now()}`, type, title, body, time: "только что", read: false, screen: targetScreen });
+};
 const todayKey = () => new Date().toLocaleDateString("sv-SE");
 const canSpinToday = () => prototypeState.lastWheelSpinDate !== todayKey();
 const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -475,7 +499,8 @@ const eventLabels = {
   promo_opened: "Открыто промо", reorder_started: "Повторная покупка", variant_selected: "Выбран объём",
   buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы", delivery_selected: "Выбрана доставка",
   payment_selected: "Выбрана оплата", pickup_selected: "Выбран пункт выдачи", delivery_slot_selected: "Выбран интервал",
-  offer_activated: "Активировано предложение"
+  offer_activated: "Активировано предложение", order_status_changed: "Изменён статус заказа",
+  push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления"
 };
 const track = (name, data = {}) => {
   prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
@@ -530,7 +555,7 @@ const quiz = () => { const step = Math.min(prototypeState.quizStep, quizQuestion
 const quizResult = () => { const recommended = prototypeState.quizResultIds.map(productById); return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ваш результат</p><button class="chip" data-action="quiz-reset">Пройти снова</button></div><h1 style="font-size:38px">Нашли вашу ароматную тройку</h1><p class="subtle" style="margin:14px 0 24px">Подборка собрана по настроению, любимым нотам и желаемому характеру.</p><div class="product-grid">${recommended.map(productCard).join("")}</div><div class="fixed-action"><button class="primary rose" data-action="quiz-add-all">Добавить три пробника · ${rub(recommended.reduce((sum,item) => sum + item.price, 0))}</button></div></section>`; };
 
 const catalog = () => `<section class="screen">
-  <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇${cartItemCount() ? `<small>${cartItemCount()}</small>` : ""}</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌</button></div></div>
+  <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇${cartItemCount() ? `<small>${cartItemCount()}</small>` : ""}</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌${unreadNotifications() ? `<small>${unreadNotifications()}</small>` : ""}</button></div></div>
   <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
@@ -601,14 +626,16 @@ const pickup = () => { const current = selectedPickup(); return `<section class=
 const orderSuccess = () => `<section class="screen"><div class="state-panel" style="min-height:690px"><div><div class="state-icon" style="width:92px;height:92px;font-size:40px;background:#e7f3ec;color:var(--success)">✓</div><p class="eyebrow">Спасибо за покупку</p><h1 style="font-size:38px">Заказ оформлен</h1><p class="subtle" style="margin:8px auto 0">Номер SIM-00001</p><p class="subtle" style="margin:14px auto 24px;max-width:300px">Отправим push, когда заказ будет собран и передан в доставку.</p><div class="card" style="text-align:left"><div class="row between"><span class="subtle">Доставка</span><strong>${prototypeState.lastOrderDelivery}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Оплата</span><strong>${prototypeState.lastOrderPayment}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Сумма</span><strong>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)}</strong></div></div><button class="primary rose" data-screen="order" style="margin-top:18px">Следить за заказом</button><button class="chip" data-screen="catalog" style="margin-top:12px">Вернуться в каталог</button></div></div></section>`;
 
 const orders = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const count = entries.reduce((sum, entry) => sum + entry.qty, 0); const first = productById(entries[0]?.id); return `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
-  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">Собираем</span></div><p class="subtle">Сегодня · ${count} ${count === 1 ? "товар" : "товара"}</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px"><img src="${first.image}" alt="${first.name}" referrerpolicy="no-referrer" /></div></div><strong>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)} ›</strong></div></article>
+  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">${currentOrderStage().label}</span></div><p class="subtle">Сегодня · ${count} ${count === 1 ? "товар" : "товара"}</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px"><img src="${first.image}" alt="${first.name}" referrerpolicy="no-referrer" /></div></div><strong>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)} ›</strong></div></article>
   <article class="card order-card" data-screen="order-delivered"><div class="row between"><span class="order-number">SIM-00000</span><span class="status">Доставлен</span></div><p class="subtle">17 июля · 1 товар</p><div class="row between"><div class="thumb" style="width:48px;height:56px">${bottle}</div><strong>${rub(229000)} ›</strong></div></article>
   ${bottomNav("orders")}</section>`; };
 
-const order = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; return `<section class="screen"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">Собираем</span></div>
+const order = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const stageIndex = orderStatusIndex(); const stage = currentOrderStage(); return `<section class="screen ${stage.id === "delivered" ? "" : "with-action"}"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">${stage.label}</span></div>
   <div class="card"><div class="row between"><span class="subtle">Доставка</span><strong>${prototypeState.lastOrderDelivery}</strong></div><div class="row between" style="margin-top:12px"><span class="subtle">Оплата</span><strong>${prototypeState.lastOrderPayment}</strong></div></div>
-  <div class="timeline"><div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">4 августа, 12:00</p></div><div class="timeline-item done"><h3>Собираем заказ</h3><p class="subtle">4 августа, 13:15</p></div><div class="timeline-item"><h3>Передадим в доставку</h3><p class="subtle">Ожидается завтра</p></div><div class="timeline-item"><h3>Заказ доставлен</h3></div></div>
+  <div class="timeline">${orderStages.map((item, index) => `<div class="timeline-item ${index <= stageIndex ? "done" : ""}"><h3>${item.title}</h3><p class="subtle">${index < stageIndex ? "Выполнено" : index === stageIndex ? item.body : "Ожидается"}</p></div>`).join("")}</div>
+  ${stage.id === "delivered" ? `<div class="card loyalty-toggle"><div class="row"><span class="coin">P</span><div><h3>Баллы начислены</h3><p class="subtle" style="margin:0">Награда уже в вашем кошельке</p></div></div></div>` : ""}
   <div class="card">${entries.map(({ id, qty, volume = 15 }) => { const item = productById(id); const unitPrice = volumePrice(item, volume); return `<div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${qty} × ${rub(unitPrice)}</p></div><strong>${rub(unitPrice * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)}</span></div></div></div>
+  ${stage.id === "delivered" ? `<button class="primary" data-action="reorder">Повторить заказ</button>` : `<div class="fixed-action"><button class="primary rose" data-action="next-order-status">Демо: следующий статус</button></div>`}
 </section>`; };
 
 const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
@@ -635,7 +662,7 @@ const profileEdit = () => `<section class="screen with-action"><div class="topli
 
 const addresses = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Адреса</h1><span></span></div>${prototypeState.addresses.map((address) => `<button class="card choice-card ${address.id === prototypeState.selectedAddressId ? "selected" : ""}" data-action="select-address" data-address-id="${address.id}"><div class="row between"><div><p class="eyebrow">${address.id === prototypeState.selectedAddressId ? "Выбран" : "Адрес"}</p><h3>${address.label}</h3></div><span>${address.id === prototypeState.selectedAddressId ? "✓" : "○"}</span></div><p class="subtle" style="margin:8px 0 0">${address.line}${address.details ? `<br>${address.details}` : ""}</p></button>`).join("")}<div class="section-head"><h2>Новый адрес</h2></div><div class="field"><label>Название</label><input id="new-address-label" placeholder="Например, Дача" /></div><div class="field"><label>Адрес</label><input id="new-address-line" placeholder="Город, улица, дом, квартира" /></div><button class="primary rose" data-action="add-address">Добавить адрес</button>${bottomNav("profile")}</section>`;
 
-const notifications = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div><span class="subtle">Прочитать все</span></div><div class="card" style="border-color:#c99aa1;margin-bottom:12px"><div class="row" style="align-items:flex-start"><span class="coin" style="width:38px;height:38px;flex:none">P</span><div><div class="row between"><h3>Баллы начислены</h3><span style="width:8px;height:8px;border-radius:50%;background:var(--rose)"></span></div><p class="subtle">+199 баллов за доставленный заказ SIM-00001</p><small class="subtle">сегодня, 17:42</small></div></div></div><div class="card" style="margin-bottom:12px"><div class="row" style="align-items:flex-start"><span class="state-icon" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">✓</span><div><h3>Заказ передан в доставку</h3><p class="subtle">Курьер привезёт заказ завтра</p><small class="subtle">вчера, 09:30</small></div></div></div><div class="card"><div class="row" style="align-items:flex-start"><span class="state-icon" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">◇</span><div><h3>Новая коллекция</h3><p class="subtle">Познакомьтесь с ароматами для тёплого вечера</p><small class="subtle">2 августа</small></div></div></div>${bottomNav("profile")}</section>`;
+const notifications = () => prototypeState.notificationFeed.length ? `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div><button class="chip" data-action="mark-notifications" ${unreadNotifications() ? "" : "disabled"}>Прочитать все</button></div>${prototypeState.notificationFeed.map((item) => `<button class="card notification-card ${item.read ? "" : "unread"}" data-action="open-notification" data-notification-id="${item.id}"><div class="row" style="align-items:flex-start"><span class="${item.type === "points" ? "coin" : "state-icon"}" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">${item.type === "points" ? "P" : item.type === "marketing" ? "◇" : "✓"}</span><div class="notification-copy"><div class="row between"><h3>${item.title}</h3>${item.read ? "" : `<span class="notification-dot"></span>`}</div><p class="subtle">${item.body}</p><small class="subtle">${item.time}</small></div></div></button>`).join("")}${bottomNav("profile")}</section>` : notificationsEmpty();
 
 const notificationsEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div></div><div class="state-panel"><div><div class="state-icon">◌</div><h2>Пока тихо</h2><p class="subtle">Здесь появятся статусы заказов, начисления баллов и важные новости.</p></div></div>${bottomNav("profile")}</section>`;
 
@@ -934,6 +961,38 @@ document.addEventListener("click", async (event) => {
     toast(prototypeState[key] ? "Push-уведомления включены" : "Push-уведомления отключены");
     return;
   }
+  if (action === "mark-notifications") {
+    prototypeState.notificationFeed = prototypeState.notificationFeed.map((item) => ({ ...item, read: true }));
+    track("notifications_read", { count: prototypeState.notificationFeed.length });
+    render("notifications", { remember: false });
+    toast("Все уведомления прочитаны");
+    return;
+  }
+  if (action === "open-notification") {
+    const notification = prototypeState.notificationFeed.find((item) => item.id === actionTarget.dataset.notificationId);
+    if (!notification) return;
+    notification.read = true;
+    track("push_opened", { notification: notification.type, target: notification.screen });
+    render(notification.screen || "notifications");
+    return;
+  }
+  if (action === "next-order-status") {
+    const nextStage = orderStages[Math.min(orderStatusIndex() + 1, orderStages.length - 1)];
+    if (!nextStage || nextStage.id === prototypeState.orderStatus) return;
+    prototypeState.orderStatus = nextStage.id;
+    let notificationBody = nextStage.body;
+    if (nextStage.id === "delivered" && !prototypeState.orderRewarded) {
+      const earnedPoints = prototypeState.claimedOfferIds.includes("double-points") || prototypeState.subscription ? 398 : 199;
+      prototypeState.points += earnedPoints;
+      prototypeState.orderRewarded = true;
+      notificationBody = `Заказ получен · начислено ${earnedPoints} баллов`;
+    }
+    addNotification({ type: nextStage.id === "delivered" ? "points" : "order", title: nextStage.title, body: notificationBody, screen: nextStage.id === "delivered" ? "loyalty" : "order" });
+    track("order_status_changed", { order: "SIM-00001", status: nextStage.id });
+    render("order", { remember: false });
+    toast(prototypeState.pushOrders ? `Push: ${nextStage.title}` : `Статус обновлён: ${nextStage.label}`);
+    return;
+  }
   if (action === "select-address") {
     prototypeState.selectedAddressId = actionTarget.dataset.addressId;
     render("addresses", { remember: false });
@@ -960,6 +1019,9 @@ document.addEventListener("click", async (event) => {
     prototypeState.courierComment = (document.querySelector("#courier-comment")?.value || prototypeState.courierComment || "").trim();
     prototypeState.lastOrderDelivery = prototypeState.deliveryMethod === "pickup" ? `${selectedPickup().name} · ${selectedPickup().address} · ${deliveryDateLabel()}` : `Курьер · ${deliveryDateLabel()}, ${prototypeState.deliverySlot}`;
     prototypeState.lastOrderPayment = paymentLabels[prototypeState.paymentMethod] || paymentLabels.card;
+    prototypeState.orderStatus = "confirmed";
+    prototypeState.orderRewarded = false;
+    addNotification({ title: "Заказ подтверждён", body: "Оплата получена · начинаем собирать заказ", screen: "order" });
     track("order_completed", { order: "SIM-00001", total: rub(prototypeState.lastOrderTotal), delivery: prototypeState.lastOrderDelivery, payment: prototypeState.lastOrderPayment });
     prototypeState.points = Math.max(0, prototypeState.points - Math.round(usedPointsMinor / 100));
     prototypeState.cartItems = {};
