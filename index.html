@@ -388,7 +388,7 @@ const defaultState = {
   orderStatus: "assembling",
   orderRewarded: false,
   notificationFeed: [
-    { id: "points-1", type: "points", title: "Баллы начислены", body: "+199 баллов за доставленный заказ SIM-00000", time: "сегодня, 17:42", read: false, screen: "loyalty" },
+    { id: "points-1", type: "points", title: "Баллы начислены", body: "+199 баллов за предыдущий доставленный заказ", time: "сегодня, 17:42", read: false, screen: "loyalty" },
     { id: "shipping-1", type: "order", title: "Заказ передан в доставку", body: "Курьер привезёт заказ завтра", time: "вчера, 09:30", read: false, screen: "order" },
     { id: "collection-1", type: "marketing", title: "Новая коллекция", body: "Познакомьтесь с ароматами для тёплого вечера", time: "2 августа", read: true, screen: "catalog" }
   ],
@@ -647,7 +647,7 @@ const orderDelivered = () => `<section class="screen"><div class="topline"><butt
 
 const loyalty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Программа лояльности</p><h1>Мои баллы</h1></div><button class="icon-btn">?</button></div>
   <div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">PdParizz Club</p><div class="balance">${new Intl.NumberFormat("ru-RU").format(prototypeState.points)} <small>баллов</small></div><p class="subtle" style="color:#d7d0c8">До 30% стоимости заказа</p></div>
-  <div class="section-head"><h2>История</h2><span>Все операции</span></div><div class="ledger"><div class="ledger-row"><div><h3>Заказ SIM-00001</h3><p class="subtle">Сегодня</p></div><strong class="minus">−500</strong></div><div class="ledger-row"><div><h3>Приветственные баллы</h3><p class="subtle">4 августа</p></div><strong class="plus">+1 000</strong></div></div>
+  <div class="section-head"><h2>История</h2><span>Все операции</span></div><div class="ledger">${prototypeState.orderRewarded ? `<div class="ledger-row"><div><h3>Заказ SIM-00001 доставлен</h3><p class="subtle">Сегодня</p></div><strong class="plus">+${prototypeState.claimedOfferIds.includes("double-points") || prototypeState.subscription ? 398 : 199}</strong></div>` : ""}<div class="ledger-row"><div><h3>Оплата баллами</h3><p class="subtle">Сегодня</p></div><strong class="minus">−500</strong></div><div class="ledger-row"><div><h3>Приветственные баллы</h3><p class="subtle">4 августа</p></div><strong class="plus">+1 000</strong></div></div>
   ${bottomNav("loyalty")}</section>`;
 
 const profile = () => `<section class="screen"><p class="eyebrow">Личный кабинет</p><h1>Профиль</h1><div class="row" style="margin-top:28px"><div class="avatar">${prototypeState.profile.name.trim().charAt(0).toUpperCase() || "P"}</div><div><h2 style="margin-bottom:5px">${prototypeState.profile.name}</h2><p class="subtle">${prototypeState.profile.phone}</p></div></div>
