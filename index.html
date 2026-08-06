@@ -372,7 +372,7 @@ const scenarios = [
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
   ["loyalty", "Лояльность"], ["loyalty-rules", "Правила лояльности"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
-  ["referral", "Рефералы"], ["subscription", "Подписка"], ["wheel", "Колесо"], ["wheel-result", "Колесо · результат"],
+  ["referral", "Рефералы"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-result", "Колесо · результат"],
   ["install", "Установка"], ["analytics", "Аналитика"], ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
   ["catalog-loading", "Loading"], ["catalog-empty", "Empty"], ["catalog-error", "Error"]
 ];
@@ -414,6 +414,12 @@ const defaultState = {
   subscription: false,
   subscriptionPlan: "annual",
   subscriptionStartedAt: null,
+  subscriptionTrialUntil: null,
+  subscriptionRenewalAt: null,
+  subscriptionCancelAtPeriodEnd: false,
+  subscriptionPaymentState: "idle",
+  subscriptionTermsAccepted: true,
+  subscriptionCancelReason: "too-expensive",
   isAuthenticated: false,
   loginPhone: "+7 999 123-45-67",
   pushOrders: true,
@@ -556,6 +562,11 @@ const loyaltyTier = () => [...loyaltyTiers].reverse().find((item) => prototypeSt
 const loyaltyProgress = () => { const tier = loyaltyTier(); if (!tier.next) return 100; return Math.max(0, Math.min(100, ((prototypeState.lifetimeSpendMinor - tier.min) / (tier.next - tier.min)) * 100)); };
 const todayKey = () => new Date().toLocaleDateString("sv-SE");
 const canSpinToday = () => prototypeState.lastWheelSpinDate !== todayKey();
+const subscriptionPlanName = () => prototypeState.subscriptionPlan === "monthly" ? "Месяц" : "Год";
+const subscriptionPrice = () => prototypeState.subscriptionPlan === "monthly" ? "399 ₽" : "2 990 ₽";
+const dateAfterDays = (days) => { const date = new Date(); date.setDate(date.getDate() + days); return date; };
+const dateLabel = (value, fallbackDays = 7) => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(value ? new Date(value) : dateAfterDays(fallbackDays));
+const subscriptionAccessUntil = () => dateLabel(prototypeState.subscriptionTrialUntil || prototypeState.subscriptionRenewalAt, 7);
 const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 let deferredInstallPrompt = null;
@@ -563,7 +574,7 @@ const eventLabels = {
   screen_view: "Открыт экран", product_view: "Открыт товар", favorite_toggle: "Изменено избранное",
   add_to_cart: "Добавлено в корзину", checkout_started: "Начато оформление", order_completed: "Оформлен заказ",
   login: "Вход выполнен", referral_reward: "Реферальный бонус", push_changed: "Настройка push",
-  subscription_changed: "Изменена подписка", wheel_reward: "Получен подарок", install_requested: "Запрошена установка",
+  subscription_changed: "Изменена подписка", subscription_checkout_started: "Начато оформление подписки", subscription_started: "Подписка активирована", subscription_cancelled: "Автопродление отключено", subscription_restored: "Автопродление включено", wheel_reward: "Получен подарок", install_requested: "Запрошена установка",
   onboarding_step: "Шаг onboarding", quiz_answer: "Ответ подбора", quiz_completed: "Подбор завершён",
   promo_opened: "Открыто промо", reorder_started: "Повторная покупка", variant_selected: "Выбран объём",
   buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы", delivery_selected: "Выбрана доставка",
@@ -760,7 +771,17 @@ const notificationsEmpty = () => `<section class="screen"><div class="topline"><
 
 const referral = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Приглашайте друзей</p><span></span></div><h1 style="font-size:36px;max-width:310px">По 300 баллов каждому</h1><p class="subtle" style="margin:14px 0 24px">Друг получит награду после первого доставленного заказа — и вам начислим столько же.</p><div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">Ваш код</p><div class="balance" style="letter-spacing:.08em">ARTUR7X</div><button class="chip" data-action="share" style="background:#fff;color:var(--ink);border:0;margin-top:12px">Скопировать ссылку</button></div><div class="section-head"><h2>Статистика</h2></div><div class="card"><div class="row between"><span>Перешли по ссылке</span><strong>4</strong></div><div class="row between" style="margin-top:16px"><span>Получили награду</span><strong>2</strong></div><div class="row between" style="margin-top:16px"><span>Начислено</span><strong class="plus">+600 P</strong></div></div><p class="subtle" style="margin-top:18px">Нельзя приглашать себя или использовать одну установку повторно.</p></section>`;
 
-const subscription = () => { const annual = prototypeState.subscriptionPlan === "annual"; return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">PdParizz Club</p><span></span></div><h1 style="font-size:38px">${prototypeState.subscription ? "Подписка активна" : "Больше любимых ароматов"}</h1><p class="subtle" style="margin:14px 0 24px">${prototypeState.subscription ? `Тариф «${annual ? "Год" : "Месяц"}». Управлять подпиской можно прямо здесь.` : "Преимущества действуют на все заказы, пока активна подписка."}</p><div class="card" style="background:#24201d;color:#fff;border:0"><div class="row"><span class="coin">P</span><div><h3>Двойные баллы</h3><p class="subtle" style="color:#cfc7bf;margin:0">10% после доставки</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">✓</span><div><h3>Бесплатная доставка</h3><p class="subtle" style="color:#cfc7bf;margin:0">Без минимальной суммы</p></div></div></div><div class="section-head"><h2>Выберите тариф</h2></div><button class="card tariff ${annual ? "selected" : ""}" data-action="tariff" data-plan="annual" style="width:100%;text-align:left"><div class="row between"><div><p class="eyebrow">Выгодно</p><h3>Год</h3><p class="subtle" style="margin:0">249 ₽ в месяц</p></div><strong>2 990 ₽</strong></div></button><button class="card tariff ${annual ? "" : "selected"}" data-action="tariff" data-plan="monthly" style="margin-top:10px;width:100%;text-align:left"><div class="row between"><div><h3>Месяц</h3><p class="subtle" style="margin:0">Отмена в любой момент</p></div><strong>399 ₽</strong></div></button><div class="fixed-action"><button class="primary ${prototypeState.subscription ? "" : "rose"}" data-action="subscribe">${prototypeState.subscription ? "Отменить подписку" : `Подключить за ${annual ? "2 990 ₽" : "399 ₽"}`}</button></div></section>`; };
+const subscriptionBenefits = () => `<div class="card" style="background:#24201d;color:#fff;border:0"><div class="row"><span class="coin">P</span><div><h3>Двойные баллы</h3><p class="subtle" style="color:#cfc7bf;margin:0">10% после доставки каждого заказа</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">✓</span><div><h3>Бесплатная доставка</h3><p class="subtle" style="color:#cfc7bf;margin:0">Курьером или в пункт выдачи</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">◇</span><div><h3>Закрытые предложения</h3><p class="subtle" style="color:#cfc7bf;margin:0">Ранний доступ и подарки клуба</p></div></div></div>`;
+
+const subscription = () => { const annual = prototypeState.subscriptionPlan === "annual"; if (prototypeState.subscription) return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Управление</p><span class="status ${prototypeState.subscriptionCancelAtPeriodEnd ? "cancelled" : ""}">${prototypeState.subscriptionCancelAtPeriodEnd ? "Завершается" : "Активна"}</span></div><h1 style="font-size:38px">PdParizz Club</h1><p class="subtle" style="margin:14px 0 22px">${prototypeState.subscriptionCancelAtPeriodEnd ? `Преимущества доступны до ${subscriptionAccessUntil()}. Новых списаний не будет.` : `Пробный период до ${subscriptionAccessUntil()}. Затем ${subscriptionPrice()} за тариф «${subscriptionPlanName()}».`}</p><div class="card" style="border-color:#d6b56d;background:#fffaf0"><p class="eyebrow">Ваш тариф</p><div class="row between"><div><h2 style="margin-bottom:5px">${subscriptionPlanName()}</h2><p class="subtle" style="margin:0">${prototypeState.subscriptionCancelAtPeriodEnd ? "Автопродление выключено" : `Следующее списание ${subscriptionAccessUntil()}`}</p></div><strong>${subscriptionPrice()}</strong></div></div>${subscriptionBenefits()}<div class="section-head"><h2>Управление</h2></div><button class="menu-row" data-action="switch-subscription-plan" style="width:100%;border:0;background:transparent;text-align:left"><span>Сменить на тариф «${annual ? "Месяц" : "Год"}»</span><b>›</b></button>${prototypeState.subscriptionCancelAtPeriodEnd ? `<button class="primary rose" data-action="restore-subscription" style="margin-top:18px">Возобновить подписку</button>` : `<button class="chip" data-action="cancel-subscription" style="width:100%;margin-top:18px">Отменить подписку</button>`}<p class="subtle" style="margin-top:14px;text-align:center">Отмена доступна в любой момент без обращения в поддержку.</p></section>`; return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">PdParizz Club</p><span></span></div><h1 style="font-size:38px">Больше любимых ароматов</h1><p class="subtle" style="margin:14px 0 24px">Попробуйте бесплатно 7 дней. Первое списание — только после пробного периода.</p>${subscriptionBenefits()}<div class="section-head"><h2>Выберите тариф</h2></div><button class="card tariff ${annual ? "selected" : ""}" data-action="tariff" data-plan="annual" style="width:100%;text-align:left"><div class="row between"><div><p class="eyebrow">Экономия 1 798 ₽</p><h3>Год</h3><p class="subtle" style="margin:0">249 ₽ в месяц</p></div><div style="text-align:right"><strong>2 990 ₽</strong><p class="subtle" style="margin:3px 0 0">после 7 дней</p></div></div></button><button class="card tariff ${annual ? "" : "selected"}" data-action="tariff" data-plan="monthly" style="margin-top:10px;width:100%;text-align:left"><div class="row between"><div><h3>Месяц</h3><p class="subtle" style="margin:0">Отмена в любой момент</p></div><div style="text-align:right"><strong>399 ₽</strong><p class="subtle" style="margin:3px 0 0">после 7 дней</p></div></div></button><div class="fixed-action"><button class="primary rose" data-action="subscribe">Попробовать 7 дней бесплатно</button></div></section>`; };
+
+const subscriptionCheckout = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Безопасное оформление</p><h1>Подписка</h1></div><span></span></div><div class="card"><div class="row between"><div><p class="eyebrow">PdParizz Club</p><h2 style="margin-bottom:5px">${subscriptionPlanName()}</h2><p class="subtle" style="margin:0">7 дней бесплатно</p></div><strong>${subscriptionPrice()}</strong></div></div><div class="section-head"><h2>Когда спишутся деньги</h2></div><div class="card"><div class="row between"><span>Сегодня</span><strong class="plus">0 ₽</strong></div><div class="row between" style="margin-top:16px"><span>${dateLabel(null, 7)}</span><strong>${subscriptionPrice()}</strong></div><p class="subtle" style="margin:14px 0 0">Напомним за день до окончания пробного периода.</p></div><div class="section-head"><h2>Способ оплаты</h2></div><button class="field" style="width:100%;text-align:left" data-action="subscription-payment"><label>Банковская карта</label><strong>•••• 4242</strong><span class="subtle">Изменить ›</span></button><button class="card choice-card ${prototypeState.subscriptionTermsAccepted ? "selected" : ""}" data-action="subscription-terms" style="width:100%;text-align:left;margin-top:14px"><div class="row" style="align-items:flex-start"><span>${prototypeState.subscriptionTermsAccepted ? "✓" : "○"}</span><p class="subtle" style="margin:0">Согласен с условиями подписки и автоматическим продлением после пробного периода.</p></div></button><div class="fixed-action"><button class="primary rose" data-action="activate-subscription" ${prototypeState.subscriptionTermsAccepted ? "" : "disabled"}>Начать бесплатно</button></div></section>`;
+
+const subscriptionProcessing = () => `<section class="screen"><div class="state-panel" style="min-height:690px"><div><div class="spinner" aria-label="Загрузка"></div><p class="eyebrow">Безопасная активация</p><h2>Подключаем PdParizz Club</h2><p class="subtle" style="margin:12px auto 0;max-width:290px">Проверяем карту. Сегодня ничего не списываем.</p></div></div></section>`;
+
+const subscriptionSuccess = () => `<section class="screen"><div class="state-panel" style="min-height:690px"><div><div class="state-icon" style="width:92px;height:92px;font-size:40px;background:#e7f3ec;color:var(--success)">✓</div><p class="eyebrow">Всё готово</p><h1 style="font-size:38px">Подписка активна</h1><p class="subtle" style="margin:14px auto 24px;max-width:300px">До ${subscriptionAccessUntil()} пользуйтесь бесплатно. Мы напомним перед первым списанием.</p><div class="card" style="text-align:left"><div class="row between"><span class="subtle">Тариф</span><strong>${subscriptionPlanName()}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Сегодня</span><strong class="plus">0 ₽</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">После пробного периода</span><strong>${subscriptionPrice()}</strong></div></div><button class="primary rose" data-screen="catalog" style="margin-top:18px">Выбрать аромат</button><button class="chip" data-screen="subscription" style="margin-top:12px">Управлять подпиской</button></div></div></section>`;
+
+const subscriptionCancel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">PdParizz Club</p><h1>Отмена подписки</h1></div><span></span></div><p class="subtle" style="margin:-6px 0 20px">Подскажите причину — это поможет сделать клуб полезнее.</p>${[["too-expensive","Дорого"],["rarely-order","Редко заказываю"],["not-useful","Не вижу пользы"]].map(([id,label]) => `<button class="card choice-card ${prototypeState.subscriptionCancelReason === id ? "selected" : ""}" data-action="subscription-cancel-reason" data-reason="${id}" style="width:100%;text-align:left;margin-bottom:10px"><div class="row between"><strong>${label}</strong><span>${prototypeState.subscriptionCancelReason === id ? "✓" : "○"}</span></div></button>`).join("")}<div class="card" style="margin-top:18px;background:#fffaf0;border-color:#d6b56d"><h3>Вы ничего не потеряете сегодня</h3><p class="subtle" style="margin:0">Преимущества сохранятся до ${subscriptionAccessUntil()}, затем подписка завершится автоматически.</p></div><div class="fixed-action"><button class="primary" data-action="confirm-subscription-cancel">Отключить автопродление</button></div></section>`;
 
 const wheel = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Ежедневный подарок</p><span>?</span></div><h1 style="text-align:center">Колесо PdParizz</h1><p class="subtle" style="text-align:center">Одна попытка в день. Результат определяет сервер.</p><div class="wheel-wrap"><span class="wheel-pointer"></span><div class="wheel"></div></div><p class="subtle" style="text-align:center">${canSpinToday() ? "Сегодня доступна 1 попытка" : "Сегодняшний подарок уже получен"}</p><div class="fixed-action"><button class="primary ${canSpinToday() ? "rose" : ""}" data-action="spin" ${canSpinToday() ? "" : "disabled"}>${canSpinToday() ? "Крутить колесо" : "Попробуйте завтра"}</button></div></section>`;
 
@@ -776,7 +797,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1282,19 +1303,69 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "subscribe") {
-    if (prototypeState.subscription) {
-      prototypeState.subscription = false;
-      prototypeState.subscriptionStartedAt = null;
-      track("subscription_changed", { value: "cancelled", plan: prototypeState.subscriptionPlan });
-      render("subscription", { remember: false });
-      toast("Подписка отменена · доступ сохранён до конца периода");
-    } else {
+    track("subscription_checkout_started", { plan: prototypeState.subscriptionPlan, price: subscriptionPrice() });
+    render("subscription-checkout");
+    return;
+  }
+  if (action === "subscription-terms") {
+    prototypeState.subscriptionTermsAccepted = !prototypeState.subscriptionTermsAccepted;
+    render("subscription-checkout", { remember: false });
+    return;
+  }
+  if (action === "subscription-payment") {
+    toast("В демо используется тестовая карта •••• 4242");
+    return;
+  }
+  if (action === "activate-subscription") {
+    if (!prototypeState.subscriptionTermsAccepted) { toast("Подтвердите условия подписки"); return; }
+    prototypeState.subscriptionPaymentState = "processing";
+    render("subscription-processing");
+    setTimeout(() => {
+      const trialEnd = dateAfterDays(7);
       prototypeState.subscription = true;
       prototypeState.subscriptionStartedAt = new Date().toISOString();
-      track("subscription_changed", { value: "active", plan: prototypeState.subscriptionPlan });
-      render("profile");
-      toast("Подписка PdParizz активирована");
-    }
+      prototypeState.subscriptionTrialUntil = trialEnd.toISOString();
+      prototypeState.subscriptionRenewalAt = trialEnd.toISOString();
+      prototypeState.subscriptionCancelAtPeriodEnd = false;
+      prototypeState.subscriptionPaymentState = "success";
+      addNotification({ type: "marketing", title: "PdParizz Club активирован", body: `7 дней бесплатно · затем ${subscriptionPrice()}`, screen: "subscription" });
+      track("subscription_started", { plan: prototypeState.subscriptionPlan, trial_days: 7, first_charge: subscriptionPrice() });
+      track("subscription_changed", { value: "trial", plan: prototypeState.subscriptionPlan });
+      render("subscription-success", { remember: false });
+      toast("PdParizz Club активирован");
+    }, 750);
+    return;
+  }
+  if (action === "switch-subscription-plan") {
+    prototypeState.subscriptionPlan = prototypeState.subscriptionPlan === "annual" ? "monthly" : "annual";
+    track("subscription_changed", { value: "plan_changed", plan: prototypeState.subscriptionPlan });
+    render("subscription", { remember: false });
+    toast(`Выбран тариф «${subscriptionPlanName()}» · со следующего периода`);
+    return;
+  }
+  if (action === "cancel-subscription") {
+    render("subscription-cancel");
+    return;
+  }
+  if (action === "subscription-cancel-reason") {
+    prototypeState.subscriptionCancelReason = actionTarget.dataset.reason || "too-expensive";
+    render("subscription-cancel", { remember: false });
+    return;
+  }
+  if (action === "confirm-subscription-cancel") {
+    prototypeState.subscriptionCancelAtPeriodEnd = true;
+    track("subscription_cancelled", { reason: prototypeState.subscriptionCancelReason, access_until: subscriptionAccessUntil() });
+    track("subscription_changed", { value: "cancel_at_period_end", plan: prototypeState.subscriptionPlan });
+    render("subscription", { remember: false });
+    toast(`Автопродление отключено · доступ до ${subscriptionAccessUntil()}`);
+    return;
+  }
+  if (action === "restore-subscription") {
+    prototypeState.subscriptionCancelAtPeriodEnd = false;
+    track("subscription_restored", { plan: prototypeState.subscriptionPlan });
+    track("subscription_changed", { value: "restored", plan: prototypeState.subscriptionPlan });
+    render("subscription", { remember: false });
+    toast("Автопродление снова включено");
     return;
   }
   if (action === "spin") {
