@@ -241,6 +241,13 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .map-label { position:absolute; left:16px; top:16px; padding:8px 10px; border-radius:10px; background:rgba(255,255,255,.92); font-size:11px; font-weight:750; }
 .map-pin { position:absolute; width:30px; height:30px; margin:-15px 0 0 -15px; border:4px solid #fff; border-radius:50% 50% 50% 8px; transform:rotate(-45deg); display:grid; place-items:center; background:var(--rose); color:#fff; box-shadow:0 5px 14px rgba(0,0,0,.22); font-size:11px; font-weight:800; z-index:2; }
 .map-pin::first-letter { transform:rotate(45deg); }
+.offer-card { width:100%; text-align:left; margin-bottom:12px; position:relative; overflow:hidden; }
+.offer-card::after { content:"P"; position:absolute; right:-8px; top:-28px; font:110px Georgia,serif; color:rgba(165,84,97,.07); pointer-events:none; }
+.offer-badge { display:inline-flex; padding:5px 8px; border-radius:999px; background:var(--rose-soft); color:var(--rose); font-size:10px; font-weight:800; margin-bottom:10px; }
+.offer-card.dark { background:#24201d; color:#fff; border:0; }
+.offer-card.dark::after { color:rgba(255,255,255,.06); }
+.offer-card.dark .subtle { color:#cfc7bf; }
+.offer-action { margin-top:14px; min-height:40px; width:auto; padding:0 16px; border:0; border-radius:12px; background:var(--rose); color:#fff; font-size:12px; font-weight:750; position:relative; z-index:1; }
 .promo-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
 .promo-row button { border: 0; border-radius: 10px; padding: 9px 11px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 750; }
 .choice-card { width: 100%; text-align: left; margin-bottom: 10px; }
@@ -335,7 +342,7 @@ const scenarios = [
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
   ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
-  ["checkout", "Оформление"], ["pickup", "Пункты выдачи"], ["order-success", "Заказ оформлен"], ["orders", "Заказы"], ["order", "Заказ"],
+  ["checkout", "Оформление"], ["pickup", "Пункты выдачи"], ["order-success", "Заказ оформлен"], ["orders", "Заказы"], ["order", "Заказ"], ["offers", "Предложения"],
   ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"],
   ["loyalty", "Лояльность"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
@@ -403,6 +410,7 @@ const defaultState = {
   courierComment: "",
   lastOrderDelivery: "Курьер · завтра, 10:00–14:00",
   lastOrderPayment: "Банковская карта",
+  claimedOfferIds: [],
   promoCode: "WELCOME10",
   promoApplied: true,
   lastOrder: [{ id: "hayati", qty: 1, volume: 15 }],
@@ -417,6 +425,7 @@ if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoritePr
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
+if (!Array.isArray(prototypeState.claimedOfferIds)) prototypeState.claimedOfferIds = [];
 if (params.get("welcome") === "1") {
   screen = "onboarding";
   prototypeState.onboardingStep = 0;
@@ -451,7 +460,7 @@ const selectedPickup = () => pickupPoints.find((item) => item.id === prototypeSt
 const deliveryDates = [["tomorrow", "Завтра", "7 августа"], ["aug8", "Суббота", "8 августа"], ["aug9", "Воскресенье", "9 августа"]];
 const deliveryDateLabel = () => { const item = deliveryDates.find(([id]) => id === prototypeState.deliveryDate) || deliveryDates[0]; return `${item[1]}, ${item[2]}`; };
 const paymentLabels = { card: "Банковская карта", sbp: "СБП", sberpay: "SberPay" };
-const deliveryPriceMinor = () => prototypeState.deliveryMethod === "pickup" ? 25000 : 35000;
+const deliveryPriceMinor = () => prototypeState.claimedOfferIds.includes("shipping") ? 0 : prototypeState.deliveryMethod === "pickup" ? 25000 : 35000;
 const todayKey = () => new Date().toLocaleDateString("sv-SE");
 const canSpinToday = () => prototypeState.lastWheelSpinDate !== todayKey();
 const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -465,7 +474,8 @@ const eventLabels = {
   onboarding_step: "Шаг onboarding", quiz_answer: "Ответ подбора", quiz_completed: "Подбор завершён",
   promo_opened: "Открыто промо", reorder_started: "Повторная покупка", variant_selected: "Выбран объём",
   buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы", delivery_selected: "Выбрана доставка",
-  payment_selected: "Выбрана оплата", pickup_selected: "Выбран пункт выдачи", delivery_slot_selected: "Выбран интервал"
+  payment_selected: "Выбрана оплата", pickup_selected: "Выбран пункт выдачи", delivery_slot_selected: "Выбран интервал",
+  offer_activated: "Активировано предложение"
 };
 const track = (name, data = {}) => {
   prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
@@ -492,10 +502,11 @@ const saveState = () => {
   const { history, ...persisted } = prototypeState;
   try { localStorage.setItem(storageKey, JSON.stringify(persisted)); } catch {}
 };
+const promoRate = () => !prototypeState.promoApplied ? 0 : prototypeState.promoCode === "PARIZZ15" ? 0.15 : 0.1;
 const orderTotalMinor = () => {
   const goods = cartGoodsMinor();
   if (!goods) return 0;
-  const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
+  const promo = Math.round(goods * promoRate());
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   return goods - promo - points + deliveryPriceMinor();
 };
@@ -523,6 +534,7 @@ const catalog = () => `<section class="screen">
   <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
+  <button class="card" data-screen="offers" style="width:100%;text-align:left;margin-bottom:12px;border-color:#d9b6bb;background:#fff7f8"><div class="row between"><div><p class="eyebrow">Только для вас</p><h3>Скидка 15% и бесплатная доставка</h3><p class="subtle" style="margin:0">Активируйте предложения перед заказом</p></div><strong>›</strong></div></button>
   <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#d9b46a">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfc7bf;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
   <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
   <div class="product-grid">${products.map(productCard).join("")}</div>
@@ -548,14 +560,14 @@ const cart = () => {
   const entries = cartEntries();
   if (!entries.length) return cartEmpty();
   const goods = cartGoodsMinor();
-  const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
+  const promo = Math.round(goods * promoRate());
   const points = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Корзина</h1><span></span></div>
     ${entries.map(({ item, qty, volume, unitPrice }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${rub(unitPrice)}</p><div class="quantity"><button data-action="decrease" data-product-id="${item.id}" aria-label="Уменьшить ${item.name}">−</button><strong>${qty}</strong><button data-action="increase" data-product-id="${item.id}" aria-label="Увеличить ${item.name}">+</button></div></div><strong>${rub(unitPrice * qty)}</strong></div></div>`).join("")}
     <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left"><div class="row"><span class="coin">P</span><div><h3>Списать доступные баллы</h3><p class="subtle" style="margin:0">Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)}</p></div></div><span class="switch ${prototypeState.usePoints ? "" : "off"}"></span></button>
-    <div class="field" style="margin-top:12px"><label>Промокод</label><div class="promo-row"><input id="promo-code" value="${prototypeState.promoCode || ""}" placeholder="Введите промокод" /><button data-action="promo">${prototypeState.promoApplied ? "Отменить" : "Применить"}</button></div></div>
+    <div class="field" style="margin-top:12px"><label>Промокод ${prototypeState.promoApplied ? `· скидка ${Math.round(promoRate() * 100)}%` : ""}</label><div class="promo-row"><input id="promo-code" value="${prototypeState.promoCode || ""}" placeholder="Введите промокод" /><button data-action="promo">${prototypeState.promoApplied ? "Отменить" : "Применить"}</button></div></div>
     <div class="summary"><div class="row"><span>Товары</span><span>${rub(goods)}</span></div><div class="row"><span>Промокод</span><span>${promo ? `−${rub(promo)}` : "Не применён"}</span></div><div class="row"><span>Баллы</span><span>−${rub(points)}</span></div><div class="row"><span>Доставка</span><span>${rub(deliveryPriceMinor())}</span></div><div class="row total"><span>Итого</span><span>${rub(total)}</span></div></div>
     <div class="fixed-action"><button class="primary" data-screen="checkout">Перейти к оформлению</button></div>
   </section>`;
@@ -567,12 +579,14 @@ const favorites = () => { const items = products.filter((item) => isFavorite(ite
 
 const favoritesEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">Ваша коллекция</p><h1>Избранное</h1></div></div><div class="state-panel"><div><div class="state-icon">♡</div><h2>Сохраняйте любимое</h2><p class="subtle">Нажмите на сердце в карточке аромата — он появится здесь.</p><button class="primary" style="padding:0 28px;width:auto">Найти аромат</button></div></div>${bottomNav("profile")}</section>`;
 
+const offers = () => { const active = (id) => prototypeState.claimedOfferIds.includes(id); const recommended = products.filter((item) => isFavorite(item.id)).concat(products.filter((item) => !isFavorite(item.id))).slice(0,4); return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">PdParizz для вас</p><h1>Предложения</h1></div><span></span></div><p class="subtle" style="margin:-8px 0 22px">Персональная витрина на основе избранного и прошлых покупок.</p><article class="card offer-card dark"><span class="offer-badge">До 9 августа</span><h2>−15% на любой аромат</h2><p class="subtle">Предложение закрепится в корзине автоматически. Код PARIZZ15.</p><button class="offer-action" data-action="claim-offer" data-offer-id="personal15" ${active("personal15") ? "disabled" : ""}>${active("personal15") ? "Активировано ✓" : "Активировать скидку"}</button></article><article class="card offer-card"><span class="offer-badge">Для участников клуба</span><h2>Бесплатная доставка</h2><p class="subtle">Курьером или в пункт выдачи — без минимальной суммы заказа.</p><button class="offer-action" data-action="claim-offer" data-offer-id="shipping" ${active("shipping") ? "disabled" : ""}>${active("shipping") ? "Активировано ✓" : "Получить доставку"}</button></article><article class="card offer-card"><span class="offer-badge">Выходные с PdParizz</span><h2>Баллы ×2</h2><p class="subtle">Начислим двойные баллы после доставки следующего заказа.</p><button class="offer-action" data-action="claim-offer" data-offer-id="double-points" ${active("double-points") ? "disabled" : ""}>${active("double-points") ? "Активировано ✓" : "Участвовать"}</button></article><div class="section-head"><h2>Подобрано для вас</h2><span data-screen="catalog">Все ароматы</span></div><div class="product-grid">${recommended.map(productCard).join("")}</div>${bottomNav("catalog")}</section>`; };
+
 const checkout = () => { const profile = prototypeState.profile; const address = selectedAddress(); const point = selectedPickup(); return `<section class="screen with-action">
   <div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Оформление</h1><span></span></div>
   <h3>Получатель</h3><div class="field" data-screen="profile-edit"><label>Имя и телефон</label><strong>${profile.name} · ${profile.phone}</strong></div>
   <h3 style="margin-top:22px">Способ доставки</h3>
-  <button class="card choice-card ${prototypeState.deliveryMethod === "courier" ? "selected" : ""}" data-action="delivery" data-delivery="courier"><div class="row between"><div><h3>Курьер СДЭК</h3><p class="subtle" style="margin:0">1–2 дня</p></div><strong>${rub(35000)}</strong></div></button>
-  <button class="card choice-card ${prototypeState.deliveryMethod === "pickup" ? "selected" : ""}" data-action="delivery" data-delivery="pickup"><div class="row between"><div><h3>Пункт выдачи СДЭК</h3><p class="subtle" style="margin:0">2–3 дня</p></div><strong>${rub(25000)}</strong></div></button>
+  <button class="card choice-card ${prototypeState.deliveryMethod === "courier" ? "selected" : ""}" data-action="delivery" data-delivery="courier"><div class="row between"><div><h3>Курьер СДЭК</h3><p class="subtle" style="margin:0">1–2 дня</p></div><strong>${prototypeState.claimedOfferIds.includes("shipping") ? "Бесплатно" : rub(35000)}</strong></div></button>
+  <button class="card choice-card ${prototypeState.deliveryMethod === "pickup" ? "selected" : ""}" data-action="delivery" data-delivery="pickup"><div class="row between"><div><h3>Пункт выдачи СДЭК</h3><p class="subtle" style="margin:0">2–3 дня</p></div><strong>${prototypeState.claimedOfferIds.includes("shipping") ? "Бесплатно" : rub(25000)}</strong></div></button>
   ${prototypeState.deliveryMethod === "courier" ? `<h3 style="margin-top:22px">Адрес</h3><div class="field" data-screen="addresses"><label>${address.label}</label><strong>${address.line}</strong><span class="subtle">Изменить ›</span></div>` : `<h3 style="margin-top:22px">Пункт выдачи</h3><button class="field" data-screen="pickup" style="width:100%;text-align:left"><label>${point.name} · ${point.distance}</label><strong>${point.address}</strong><span class="subtle">${point.hours} · Изменить ›</span></button>`}
   <h3 style="margin-top:22px">Дата доставки</h3><div class="date-grid">${deliveryDates.map(([id, title, date]) => `<button class="date-option ${prototypeState.deliveryDate === id ? "selected" : ""}" data-action="delivery-date" data-date="${id}"><strong>${title}</strong><small>${date}</small></button>`).join("")}</div>
   <h3 style="margin-top:22px">Интервал</h3><div class="slot-grid">${["10:00–14:00", "14:00–18:00", "18:00–22:00"].map((slot) => `<button class="chip ${prototypeState.deliverySlot === slot ? "active" : ""}" data-action="delivery-slot" data-slot="${slot}">${slot}</button>`).join("")}</div>
@@ -610,7 +624,7 @@ const loyalty = () => `<section class="screen"><div class="topline"><div><p clas
   ${bottomNav("loyalty")}</section>`;
 
 const profile = () => `<section class="screen"><p class="eyebrow">Личный кабинет</p><h1>Профиль</h1><div class="row" style="margin-top:28px"><div class="avatar">${prototypeState.profile.name.trim().charAt(0).toUpperCase() || "P"}</div><div><h2 style="margin-bottom:5px">${prototypeState.profile.name}</h2><p class="subtle">${prototypeState.profile.phone}</p></div></div>
-  <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="install"><span>${isStandalone() ? "Приложение установлено" : "Установить на телефон"}</span><b>›</b></div><div class="menu-row" data-screen="analytics"><span>События MVP</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
+  <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="offers"><span>Персональные предложения</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="install"><span>${isStandalone() ? "Приложение установлено" : "Установить на телефон"}</span><b>›</b></div><div class="menu-row" data-screen="analytics"><span>События MVP</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
   ${bottomNav("profile")}</section>`;
 
 const authPhone = () => `<section class="screen with-action" style="padding-top:70px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 24px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#c99aa1;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>Код ${prototypeState.referralCode}</h3><p class="subtle" style="margin:0">После входа начислим 300 приветственных баллов.</p></div>` : ""}<div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" /></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button></div></section>`;
@@ -643,7 +657,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, checkout, pickup, "order-success": orderSuccess, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -847,14 +861,24 @@ document.addEventListener("click", async (event) => {
       return;
     }
     const code = (document.querySelector("#promo-code")?.value || "").trim().toUpperCase();
-    if (code !== "WELCOME10") {
+    if (!["WELCOME10", "PARIZZ15"].includes(code)) {
       toast("Промокод не найден");
       return;
     }
     prototypeState.promoCode = code;
     prototypeState.promoApplied = true;
     render("cart", { remember: false });
-    toast("Скидка 10% применена");
+    toast(`Скидка ${Math.round(promoRate() * 100)}% применена`);
+    return;
+  }
+  if (action === "claim-offer") {
+    const offerId = actionTarget.dataset.offerId;
+    if (!offerId || prototypeState.claimedOfferIds.includes(offerId)) return;
+    prototypeState.claimedOfferIds = [...prototypeState.claimedOfferIds, offerId];
+    if (offerId === "personal15") { prototypeState.promoCode = "PARIZZ15"; prototypeState.promoApplied = true; }
+    track("offer_activated", { offer: offerId });
+    render("offers", { remember: false });
+    toast(offerId === "personal15" ? "Скидка 15% добавлена в корзину" : offerId === "shipping" ? "Бесплатная доставка активна" : "Двойные баллы активированы");
     return;
   }
   if (action === "delivery") {
@@ -929,7 +953,7 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "pay") {
     const goods = cartGoodsMinor();
-    const promo = prototypeState.promoApplied ? Math.round(goods * 0.1) : 0;
+    const promo = Math.round(goods * promoRate());
     const usedPointsMinor = prototypeState.usePoints ? Math.min(prototypeState.points * 100, goods - promo) : 0;
     prototypeState.lastOrder = cartEntries().map(({ item, qty, volume }) => ({ id: item.id, qty, volume }));
     prototypeState.lastOrderTotal = orderTotalMinor();
