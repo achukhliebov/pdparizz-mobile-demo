@@ -382,7 +382,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
     </main>
     <script type="module">
 const scenarios = [
-  ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
+  ["demo-hub", "Демо-центр"], ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
   ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
@@ -682,7 +682,7 @@ const eventLabels = {
   push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления",
   order_cancelled: "Отменён заказ", support_message_sent: "Сообщение в поддержку",
   cart_recovered: "Восстановлена корзина", cart_recovery_dismissed: "Скрыто напоминание корзины",
-  payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты"
+  payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты", demo_flow_started: "Запущен демо-сценарий"
 };
 const track = (name, data = {}) => {
   const attributionContext = prototypeState.attribution || defaultState.attribution;
@@ -694,6 +694,20 @@ const track = (name, data = {}) => {
     prototypeState.syncQueue.push({ id: `evt-${at}-${Math.random().toString(36).slice(2,7)}`, event: name, occurred_at: new Date(at).toISOString(), anonymous_id: prototypeState.attributionSessionId, source: attributionContext.source, campaign: attributionContext.campaign, payload: data });
     prototypeState.syncQueue = prototypeState.syncQueue.slice(-100);
   }
+};
+const seedFunnelDemo = () => {
+  const capturedAt = new Date().toISOString();
+  prototypeState.attribution = { source: "yandex", medium: "cpc", campaign: "summer_perfume", content: "mango_video_01", clickId: `yclid-demo-${Date.now().toString().slice(-5)}`, firstSeenAt: prototypeState.attribution.firstSeenAt || capturedAt, lastSeenAt: capturedAt, lastTarget: "product:mango-skin" };
+  track("attribution_captured", { source: "yandex", medium: "cpc", campaign: "summer_perfume", target: "product:mango-skin" });
+  track("deep_link_opened", { source: "yandex", target: "product:mango-skin" });
+  track("product_view", { product: "mango-skin" });
+  track("add_to_cart", { product: "mango-skin", volume: "15 мл", quantity: 1 });
+  track("checkout_started", { items: 1 });
+  track("payment_started", { method: "card", total: "449 ₽" });
+  track("order_completed", { order: "SIM-DEMO-01", total: "449 ₽", journey: "first" });
+  track("reorder_started", { order: "SIM-DEMO-01", items: 1 });
+  track("checkout_started", { items: 1, journey: "repeat" });
+  track("order_completed", { order: "SIM-DEMO-02", total: "449 ₽", journey: "repeat" });
 };
 const onboardingSlides = [
   { symbol: "P", eyebrow: "Добро пожаловать", title: "Ароматы, которые хочется носить", body: "Реальные позиции PdParizz, избранное и быстрый заказ — в одном месте." },
@@ -741,6 +755,17 @@ const productCard = (item) => `<article class="product-card" data-screen="produc
   <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
   <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><div class="price">${rub(item.price)}</div></div>
 </article>`;
+
+const demoHub = () => {
+  const flows = [
+    ["purchase", "◇", "Покупка за 60 секунд", "Товар → корзина → оформление → оплата"],
+    ["order", "✓", "Заказ и доставка", "Статусы, push, отмена и поддержка"],
+    ["loyalty", "P", "Лояльность и удержание", "Баллы, подписка и колесо подарков"],
+    ["growth", "+", "Привлечение клиентов", "Deep links, рефералы и рекламная атрибуция"],
+    ["analytics", "↗", "Результат для бизнеса", "Воронка, повторная покупка и очередь данных"]
+  ];
+  return `<section class="screen"><div class="topline"><div><p class="eyebrow">Презентация PdParizz</p><h1>Демо-центр</h1></div><span class="subtle">MVP</span></div><div class="card" style="background:#24201d;color:#fff;border:0"><p class="eyebrow" style="color:#d9b46a">Готово для показа</p><h2 style="font-size:30px;margin-bottom:8px">Выберите историю</h2><p class="subtle" style="color:#cfc7bf;margin:0">Каждая карточка открывает заранее подготовленную точку входа. Дальше всё можно нажимать вручную.</p><div class="row between" style="margin-top:20px"><strong>12 товаров</strong><strong>5 сценариев</strong><strong>50+ экранов</strong></div></div><div class="section-head"><h2>Сценарии</h2></div>${flows.map(([flow,symbol,title,body]) => `<button class="card" data-action="start-demo-flow" data-flow="${flow}" style="width:100%;text-align:left;margin-bottom:10px"><div class="row"><span class="state-icon" style="width:42px;height:42px;margin:0;font-size:16px">${symbol}</span><div style="flex:1"><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div><strong>›</strong></div></button>`).join("")}<button class="chip" data-action="reset-demo" style="width:100%;margin-top:8px">Сбросить демонстрацию</button><p class="subtle" style="margin-top:16px;text-align:center">Все действия выполняются только на этом устройстве.</p></section>`;
+};
 
 const onboarding = () => { const step = Math.min(prototypeState.onboardingStep, onboardingSlides.length - 1); const slide = onboardingSlides[step]; return `<section class="screen with-action"><div class="onboarding-art">${slide.symbol}</div><p class="eyebrow">${slide.eyebrow}</p><h1 style="font-size:38px;max-width:330px">${slide.title}</h1><p class="subtle" style="font-size:15px;margin:16px 0 0;max-width:330px">${slide.body}</p><div class="progress-dots">${onboardingSlides.map((_, index) => `<span class="progress-dot ${index === step ? "active" : ""}"></span>`).join("")}</div><button class="chip" data-action="onboarding-skip">Пропустить</button><div class="fixed-action"><button class="primary rose" data-action="onboarding-next">${step === onboardingSlides.length - 1 ? "Подобрать аромат" : "Продолжить"}</button></div></section>`; };
 
@@ -939,7 +964,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1625,6 +1650,47 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
+  if (action === "start-demo-flow") {
+    const flow = actionTarget.dataset.flow || "purchase";
+    const targets = { purchase: "product", order: "order", loyalty: "loyalty", growth: "referral", analytics: "analytics" };
+    if (flow === "purchase") {
+      prototypeState.selectedProductId = "mango-skin";
+      prototypeState.selectedVolume = 15;
+      prototypeState.productQuantity = 1;
+      prototypeState.cartItems = {};
+      prototypeState.cartVolumes = {};
+      prototypeState.paymentState = "idle";
+      prototypeState.pendingPurchaseOrigin = "acquisition";
+      recordRecentView("mango-skin");
+      track("product_view", { product: "mango-skin", entry: "demo-hub" });
+    } else if (flow === "order") {
+      prototypeState.orderStatus = "shipping";
+      prototypeState.orderCancelled = false;
+      prototypeState.orderRefunded = false;
+      prototypeState.lastOrder = [{ id: "hayati", qty: 1, volume: 15 }];
+      prototypeState.lastOrderTotal = 44900;
+    } else if (flow === "loyalty") {
+      prototypeState.points = Math.max(Number(prototypeState.points) || 0, 1250);
+      prototypeState.pointsExpiring = 120;
+    } else if (flow === "growth") {
+      prototypeState.referralCode = "ARTUR7X";
+      prototypeState.referralFriendStage = "ordered";
+      prototypeState.referralRewardPending = true;
+    } else if (flow === "analytics") {
+      seedFunnelDemo();
+    }
+    track("demo_flow_started", { flow, target: targets[flow] || "product" });
+    render(targets[flow] || "product");
+    toast("Демо-сценарий запущен");
+    return;
+  }
+  if (action === "reset-demo") {
+    Object.assign(prototypeState, JSON.parse(JSON.stringify(defaultState)), { history: [] });
+    localStorage.removeItem(storageKey);
+    render("demo-hub", { remember: false });
+    toast("MVP возвращён в исходное состояние");
+    return;
+  }
   if (action === "toggle-analytics-consent") {
     prototypeState.analyticsConsent = prototypeState.analyticsConsent === false;
     if (prototypeState.analyticsConsent === false) prototypeState.syncQueue = [];
@@ -1649,18 +1715,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "run-funnel-demo") {
-    const capturedAt = new Date().toISOString();
-    prototypeState.attribution = { source: "yandex", medium: "cpc", campaign: "summer_perfume", content: "mango_video_01", clickId: `yclid-demo-${Date.now().toString().slice(-5)}`, firstSeenAt: prototypeState.attribution.firstSeenAt || capturedAt, lastSeenAt: capturedAt, lastTarget: "product:mango-skin" };
-    track("attribution_captured", { source: "yandex", medium: "cpc", campaign: "summer_perfume", target: "product:mango-skin" });
-    track("deep_link_opened", { source: "yandex", target: "product:mango-skin" });
-    track("product_view", { product: "mango-skin" });
-    track("add_to_cart", { product: "mango-skin", volume: "15 мл", quantity: 1 });
-    track("checkout_started", { items: 1 });
-    track("payment_started", { method: "card", total: "449 ₽" });
-    track("order_completed", { order: "SIM-DEMO-01", total: "449 ₽", journey: "first" });
-    track("reorder_started", { order: "SIM-DEMO-01", items: 1 });
-    track("checkout_started", { items: 1, journey: "repeat" });
-    track("order_completed", { order: "SIM-DEMO-02", total: "449 ₽", journey: "repeat" });
+    seedFunnelDemo();
     saveState();
     render("analytics", { remember: false });
     toast("Демо-воронка заполнена");
