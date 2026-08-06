@@ -290,6 +290,13 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .tier-perks { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 14px; }
 .tier-perk { padding: 10px 6px; border-radius: 12px; background: rgba(255,255,255,.08); text-align: center; font-size: 10px; line-height: 1.35; }
 .expiry-card { border-color: #e2c68d; background: #fffaf0; margin-top: 12px; }
+.recovery-card { width: 100%; text-align: left; margin-bottom: 18px; border: 0; background: linear-gradient(135deg,#2f2924,#55463c); color: #fff; }
+.recovery-card .subtle { color: #d3ccc5; }
+.mini-product-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+.mini-product-row::-webkit-scrollbar { display: none; }
+.mini-product { flex: 0 0 132px; text-align: left; border: 0; background: transparent; padding: 0; }
+.mini-product img { width: 132px; height: 142px; object-fit: contain; padding: 8px; border-radius: 16px; background: #f1ece3; }
+.mini-product h3 { margin: 8px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .wheel-wrap { display: grid; place-items: center; margin: 30px 0; position: relative; }
 .wheel {
@@ -389,6 +396,9 @@ const storageKey = "pdparizz-mvp-state-v4";
 const defaultState = {
   cartItems: {},
   favoriteProductIds: ["hayati", "creed-aventus"],
+  recentlyViewedProductIds: ["lv-pacific", "hayati"],
+  cartSavedAt: null,
+  cartRecoveryDismissed: false,
   usePoints: true,
   points: 500,
   lifetimeSpendMinor: 420000,
@@ -459,6 +469,7 @@ const prototypeState = { ...defaultState, ...storedState, history: [] };
 if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) prototypeState.cartItems = {};
 if (!prototypeState.cartVolumes || Array.isArray(prototypeState.cartVolumes)) prototypeState.cartVolumes = {};
 if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
+if (!Array.isArray(prototypeState.recentlyViewedProductIds)) prototypeState.recentlyViewedProductIds = [...defaultState.recentlyViewedProductIds];
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
 if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length) prototypeState.addresses = [...defaultState.addresses];
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
@@ -484,6 +495,18 @@ if (incomingReferral && !prototypeState.referralRewardClaimed) {
 }
 const productById = (id) => products.find((item) => item.id === id) || products[0];
 const selectedProduct = () => productById(prototypeState.selectedProductId);
+const recordRecentView = (id) => {
+  prototypeState.recentlyViewedProductIds = [id, ...prototypeState.recentlyViewedProductIds.filter((itemId) => itemId !== id)].slice(0, 6);
+};
+const personalizedProducts = () => {
+  const preferredCategories = new Set((prototypeState.lastOrder || []).map(({ id }) => productById(id).category));
+  const ids = [...prototypeState.favoriteProductIds, ...prototypeState.recentlyViewedProductIds, ...products.filter((item) => preferredCategories.has(item.category)).map((item) => item.id)];
+  return [...new Set(ids)].map(productById).slice(0, 4);
+};
+const markCartSaved = () => {
+  prototypeState.cartSavedAt = Date.now();
+  prototypeState.cartRecoveryDismissed = false;
+};
 const volumePrice = (item, volume = 15) => volume === 50 ? 119900 : volume === 30 ? 79900 : item.price;
 const volumeOldPrice = (item, volume = 15) => Math.round(item.oldPrice * (volume / 15) * (volume === 15 ? 1 : .86));
 const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => { const item = productById(id); const volume = Number(prototypeState.cartVolumes[id]) || 15; return { item, qty: Number(qty) || 0, volume, unitPrice: volumePrice(item, volume) }; }).filter(({ qty }) => qty > 0);
@@ -541,7 +564,8 @@ const eventLabels = {
   payment_selected: "Выбрана оплата", pickup_selected: "Выбран пункт выдачи", delivery_slot_selected: "Выбран интервал",
   offer_activated: "Активировано предложение", order_status_changed: "Изменён статус заказа",
   push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления",
-  order_cancelled: "Отменён заказ", support_message_sent: "Сообщение в поддержку"
+  order_cancelled: "Отменён заказ", support_message_sent: "Сообщение в поддержку",
+  cart_recovered: "Восстановлена корзина", cart_recovery_dismissed: "Скрыто напоминание корзины"
 };
 const track = (name, data = {}) => {
   prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
@@ -600,8 +624,11 @@ const catalog = () => `<section class="screen">
   <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
+  ${cartItemCount() && !prototypeState.cartRecoveryDismissed ? `<div class="card recovery-card"><div class="row between" style="align-items:flex-start"><button data-screen="cart" data-action="recover-cart" style="flex:1;border:0;background:transparent;color:inherit;text-align:left;padding:0"><p class="eyebrow" style="color:#d9b46a">Сохранили для вас</p><h2 style="margin-bottom:6px">В корзине ${cartItemCount()} ${cartItemCount() === 1 ? "аромат" : "аромата"}</h2><p class="subtle" style="margin:0">Продолжить оформление · ${rub(cartGoodsMinor())} →</p></button><button class="chip" data-action="dismiss-cart-recovery" style="color:#fff;border-color:#77685d">Скрыть</button></div></div>` : ""}
   <button class="card" data-screen="offers" style="width:100%;text-align:left;margin-bottom:12px;border-color:#d9b6bb;background:#fff7f8"><div class="row between"><div><p class="eyebrow">Только для вас</p><h3>Скидка 15% и бесплатная доставка</h3><p class="subtle" style="margin:0">Активируйте предложения перед заказом</p></div><strong>›</strong></div></button>
   <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#d9b46a">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfc7bf;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
+  <div class="section-head"><h2>Для ${prototypeState.profile.name}</h2><span>По вашим интересам</span></div><div class="product-grid">${personalizedProducts().map(productCard).join("")}</div>
+  ${prototypeState.recentlyViewedProductIds.length ? `<div class="section-head"><h2>Недавно смотрели</h2><span>${prototypeState.recentlyViewedProductIds.length}</span></div><div class="mini-product-row">${prototypeState.recentlyViewedProductIds.map(productById).map((item) => `<button class="mini-product" data-screen="product" data-product-id="${item.id}"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><h3>${item.name}</h3><strong>${rub(item.price)}</strong></button>`).join("")}</div>` : ""}
   <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
   <div class="product-grid">${products.map(productCard).join("")}</div>
   ${bottomNav("catalog")}
@@ -838,6 +865,7 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "quiz-add-all") {
     prototypeState.quizResultIds.forEach((id) => { prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1; prototypeState.cartVolumes[id] = 15; });
+    markCartSaved();
     track("add_to_cart", { product: "quiz_bundle", count: prototypeState.quizResultIds.length });
     render("cart");
     toast("Три аромата добавлены в корзину");
@@ -847,6 +875,7 @@ document.addEventListener("click", async (event) => {
     prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty]));
     prototypeState.cartVolumes = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, volume = 15 }) => [id, volume]));
     prototypeState.promoApplied = false;
+    markCartSaved();
     track("reorder_started", { order: "SIM-00001", items: cartItemCount() });
     render("cart");
     toast("Предыдущий заказ добавлен в корзину");
@@ -892,6 +921,7 @@ document.addEventListener("click", async (event) => {
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
     prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
     prototypeState.cartVolumes[id] = Number(prototypeState.selectedVolume) || 15;
+    markCartSaved();
     track("add_to_cart", { product: id, volume: `${prototypeState.cartVolumes[id]} мл`, quantity });
     saveState();
     toast(`${quantity} шт. добавлено в корзину`);
@@ -903,6 +933,7 @@ document.addEventListener("click", async (event) => {
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
     prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
     prototypeState.cartVolumes[id] = Number(prototypeState.selectedVolume) || 15;
+    markCartSaved();
     track("buy_now", { product: id, volume: `${prototypeState.cartVolumes[id]} мл`, quantity });
     track("checkout_started", { items: cartItemCount(), source: "buy_now" });
     render("checkout");
@@ -914,7 +945,22 @@ document.addEventListener("click", async (event) => {
     const nextQty = Math.max(0, (Number(prototypeState.cartItems[id]) || 0) + (action === "increase" ? 1 : -1));
     if (nextQty) prototypeState.cartItems[id] = nextQty;
     else { delete prototypeState.cartItems[id]; delete prototypeState.cartVolumes[id]; }
+    if (cartItemCount()) markCartSaved(); else prototypeState.cartSavedAt = null;
     render("cart", { remember: false });
+    return;
+  }
+  if (action === "recover-cart") {
+    track("cart_recovered", { items: cartItemCount(), total: rub(cartGoodsMinor()) });
+    render("cart");
+    toast("Сохранённая корзина восстановлена");
+    return;
+  }
+  if (action === "dismiss-cart-recovery") {
+    event.preventDefault();
+    event.stopPropagation();
+    prototypeState.cartRecoveryDismissed = true;
+    track("cart_recovery_dismissed", { items: cartItemCount() });
+    render("catalog", { remember: false });
     return;
   }
   if (action === "filter") {
@@ -1123,6 +1169,8 @@ document.addEventListener("click", async (event) => {
     prototypeState.points = Math.max(0, prototypeState.points - Math.round(usedPointsMinor / 100));
     prototypeState.cartItems = {};
     prototypeState.cartVolumes = {};
+    prototypeState.cartSavedAt = null;
+    prototypeState.cartRecoveryDismissed = false;
     render("order-success");
     toast("Заказ SIM-00001 успешно оформлен");
     return;
@@ -1228,6 +1276,7 @@ document.addEventListener("click", async (event) => {
     event.preventDefault();
     if (screenTarget.dataset.productId) {
       prototypeState.selectedProductId = screenTarget.dataset.productId;
+      recordRecentView(screenTarget.dataset.productId);
       prototypeState.selectedVolume = Number(prototypeState.cartVolumes[screenTarget.dataset.productId]) || 15;
       prototypeState.productQuantity = 1;
       track("product_view", { product: screenTarget.dataset.productId });
@@ -1266,7 +1315,7 @@ window.addEventListener("appinstalled", () => {
 window.addEventListener("offline", () => toast("Нет сети · включён офлайн-режим"));
 window.addEventListener("online", () => toast("Соединение восстановлено"));
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
-if (deepLinkProduct) track("product_view", { product: deepLinkProduct, source: "deep_link" });
+if (deepLinkProduct) { recordRecentView(deepLinkProduct); track("product_view", { product: deepLinkProduct, source: "deep_link" }); }
 if (params.get("source") === "installed") track("screen_view", { screen: "installed_launch" });
 render(screen, { remember: false });
 if (incomingReferral && prototypeState.referralRewardPending) setTimeout(() => toast("Реферальный подарок готов · войдите, чтобы получить 300 баллов"), 250);
