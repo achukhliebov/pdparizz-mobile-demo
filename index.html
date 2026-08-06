@@ -211,6 +211,13 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .event-row { padding: 11px 0; border-bottom: 1px solid var(--line); }
 .event-row:last-child { border-bottom: 0; }
 .event-row time { color: var(--muted); font-size: 10px; }
+.funnel-row { display:grid; grid-template-columns:34px 1fr auto; gap:11px; align-items:center; padding:10px 0; }
+.funnel-row + .funnel-row { border-top:1px solid var(--line); }
+.funnel-step { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; background:#eee9e2; color:var(--muted); font-weight:800; font-size:12px; }
+.funnel-row.done .funnel-step { background:#e7f3ec; color:var(--success); }
+.funnel-track { height:6px; margin-top:7px; background:#eee9e2; border-radius:99px; overflow:hidden; }
+.funnel-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--rose),#d9b46a); }
+.funnel-rate { min-width:42px; text-align:right; font-weight:800; font-size:12px; }
 .onboarding-art { height: 330px; margin: -18px -18px 28px; border-radius: 0 0 36px 36px; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.7), transparent 25%), linear-gradient(145deg,#ead9dc,#b86f7b); color:#fff; font: 150px Georgia,serif; position:relative; overflow:hidden; }
 .onboarding-art::after { content:"PdParizz"; position:absolute; bottom:28px; font: 18px Georgia,serif; letter-spacing:.08em; }
 .progress-dots { display:flex; gap:7px; margin:18px 0; }
@@ -468,6 +475,8 @@ const defaultState = {
     { id: "invite-new", name: "Новый переход", stage: "clicked", label: "Ещё не зарегистрирован", date: "Сегодня" }
   ],
   analyticsEvents: [],
+  pendingPurchaseOrigin: "acquisition",
+  completedOrderCount: 0,
   onboardingStep: 0,
   onboardingCompleted: false,
   quizStep: 0,
@@ -669,7 +678,8 @@ const eventLabels = {
   payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты"
 };
 const track = (name, data = {}) => {
-  prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
+  const attributionContext = prototypeState.attribution || defaultState.attribution;
+  prototypeState.analyticsEvents.unshift({ name, data: { source: attributionContext.source, campaign: attributionContext.campaign, session: prototypeState.attributionSessionId, ...data }, at: Date.now() });
   prototypeState.analyticsEvents = prototypeState.analyticsEvents.slice(0, 50);
 };
 const onboardingSlides = [
@@ -885,7 +895,22 @@ const wheelResult = () => { const prize = lastWheelPrize(); const expires = prot
 
 const install = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Быстрый доступ</p><span></span></div><div class="row" style="align-items:flex-start;margin-bottom:26px"><div class="install-logo">P</div><div><h1 style="font-size:34px">PdParizz на телефоне</h1><p class="subtle" style="margin:10px 0 0">Открывается как обычное приложение и сохраняет каталог для повторного запуска.</p></div></div>${isStandalone() ? `<div class="card loyalty-toggle"><div class="row"><span class="state-icon" style="width:42px;height:42px;margin:0;font-size:17px">✓</span><div><h3>Приложение установлено</h3><p class="subtle" style="margin:0">Запускайте PdParizz с домашнего экрана.</p></div></div></div>` : `<div class="card"><div class="install-step"><span class="step-number">1</span><div><h3>Откройте ссылку в Safari</h3><p class="subtle" style="margin:0">Для iPhone установка выполняется из Safari.</p></div></div><div class="install-step"><span class="step-number">2</span><div><h3>Нажмите «Поделиться»</h3><p class="subtle" style="margin:0">Кнопка с квадратом и стрелкой находится в панели браузера.</p></div></div><div class="install-step"><span class="step-number">3</span><div><h3>Выберите «На экран Домой»</h3><p class="subtle" style="margin:0">Подтвердите название PdParizz кнопкой «Добавить».</p></div></div></div>`}<div class="section-head"><h2>Что уже работает</h2></div><div class="card"><div class="row between"><span>Запуск без адресной строки</span><strong>✓</strong></div><div class="row between" style="margin-top:14px"><span>Каталог при слабой сети</span><strong>✓</strong></div><div class="row between" style="margin-top:14px"><span>Deep links и рефералы</span><strong>✓</strong></div></div><div class="fixed-action"><button class="primary rose" data-action="install-app" ${isStandalone() ? "disabled" : ""}>${isStandalone() ? "Уже установлено" : isIOS() ? "Понятно, установить в Safari" : "Установить приложение"}</button></div></section>`;
 
-const analytics = () => { const events = prototypeState.analyticsEvents; const counts = events.reduce((result, event) => ({ ...result, [event.name]: (result[event.name] || 0) + 1 }), {}); return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Локальная аналитика</p><h1>События MVP</h1></div><span class="subtle">${events.length}/50</span></div><div class="card" style="background:#24201d;color:#fff;border:0"><div class="row between"><div><p class="subtle" style="color:#cfc7bf;margin:0">Просмотры экранов</p><h2 style="margin:4px 0 0">${counts.screen_view || 0}</h2></div><div><p class="subtle" style="color:#cfc7bf;margin:0">Корзина</p><h2 style="margin:4px 0 0">${counts.add_to_cart || 0}</h2></div><div><p class="subtle" style="color:#cfc7bf;margin:0">Заказы</p><h2 style="margin:4px 0 0">${counts.order_completed || 0}</h2></div></div></div><div class="section-head"><h2>Последние действия</h2><button class="chip" data-action="clear-analytics">Очистить</button></div><div class="card">${events.length ? events.slice(0,12).map((event) => `<div class="event-row"><div class="row between"><strong>${eventLabels[event.name] || event.name}</strong><time>${new Date(event.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div><p class="subtle" style="margin:4px 0 0">${Object.values(event.data || {}).join(" · ") || "PdParizz MVP"}</p></div>`).join("") : `<p class="subtle" style="margin:0">Действия появятся здесь по мере использования прототипа.</p>`}</div><p class="subtle" style="margin-top:16px">В прототипе события хранятся только на этом устройстве. После подключения продуктовой аналитики схема останется той же.</p></section>`; };
+const analytics = () => {
+  const events = prototypeState.analyticsEvents;
+  const counts = events.reduce((result, event) => ({ ...result, [event.name]: (result[event.name] || 0) + 1 }), {});
+  const hasEvent = (name, test = () => true) => events.some((event) => event.name === name && test(event.data || {}));
+  const stages = [
+    ["Источник", Boolean(events.length || prototypeState.attribution?.lastSeenAt), prototypeState.attribution?.source || "Прямой переход"],
+    ["Товар", hasEvent("product_view") || hasEvent("deep_link_opened", (data) => String(data.target || "").startsWith("product:")), `${counts.product_view || 0} просмотров`],
+    ["Корзина", hasEvent("add_to_cart"), `${counts.add_to_cart || 0} добавлений`],
+    ["Оформление", hasEvent("checkout_started") || hasEvent("payment_started"), `${counts.checkout_started || 0} стартов`],
+    ["Заказ", hasEvent("order_completed"), `${counts.order_completed || 0} покупок`],
+    ["Повтор", hasEvent("order_completed", (data) => data.journey === "repeat"), `${events.filter((event) => event.name === "order_completed" && event.data?.journey === "repeat").length} повторов`]
+  ];
+  const reached = stages.filter(([, done]) => done).length;
+  const conversion = stages[0][1] ? Math.round((stages[4][1] ? 1 : 0) * 100) : 0;
+  return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Сквозная аналитика</p><h1>Воронка продаж</h1></div><span class="subtle">${events.length}/50</span></div><div class="card" style="background:#24201d;color:#fff;border:0"><p class="eyebrow" style="color:#d9b46a">${prototypeState.attribution?.source || "Прямой переход"} · ${prototypeState.attribution?.campaign || "—"}</p><div class="row between" style="align-items:flex-end"><div><p class="subtle" style="color:#cfc7bf;margin:0">Этапов пройдено</p><h2 style="font-size:34px;margin:4px 0 0">${reached}/6</h2></div><div style="text-align:right"><p class="subtle" style="color:#cfc7bf;margin:0">Переход → заказ</p><h2 style="font-size:34px;margin:4px 0 0">${conversion}%</h2></div></div></div><div class="section-head"><h2>Путь покупателя</h2><button class="chip" data-action="run-funnel-demo">Показать демо</button></div><div class="card">${stages.map(([label, done, note], index) => `<div class="funnel-row ${done ? "done" : ""}"><span class="funnel-step">${done ? "✓" : index + 1}</span><div><strong>${label}</strong><p class="subtle" style="margin:2px 0 0">${note}</p><div class="funnel-track"><div class="funnel-fill" style="width:${done ? Math.max(18, 100 - index * 13) : 0}%"></div></div></div><span class="funnel-rate">${done ? "Есть" : "—"}</span></div>`).join("")}</div><div class="section-head"><h2>Последние действия</h2><button class="chip" data-action="clear-analytics">Очистить</button></div><div class="card">${events.length ? events.slice(0,10).map((event) => `<div class="event-row"><div class="row between"><strong>${eventLabels[event.name] || event.name}</strong><time>${new Date(event.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div><p class="subtle" style="margin:4px 0 0">${[event.data?.product || event.data?.target || event.data?.order || event.data?.source, event.data?.journey, event.data?.total].filter(Boolean).join(" · ") || "PdParizz MVP"}</p></div>`).join("") : `<p class="subtle" style="margin:0">Пройдите путь покупателя или запустите демо-воронку.</p>`}</div><p class="subtle" style="margin-top:16px">В MVP события и рекламный источник хранятся только на устройстве, без имени и телефона.</p></section>`;
+};
 
 const privacy = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><h1>Конфиденциальность</h1><span></span></div><h2>Как используются данные</h2><p class="subtle">MVP хранит данные профиля и покупок только для работы личного кабинета.</p>${[["Что сохраняем","Номер телефона, имя, email, адреса, заказы, баллы и настройки уведомлений."],["Аналитика","Только обезличенные события без содержимого полей и номера телефона."],["Push-уведомления","Разрешение запрашивается после вашего согласия."],["Удаление данных","Выход очищает локальную сессию. Полное удаление появится после подключения API."]].map(([title,body]) => `<div class="card" style="margin-top:12px"><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div>`).join("")}<p class="subtle" style="margin-top:18px">Версия для MVP · 4 августа 2026</p></section>`;
 const offline = () => `<section class="screen">${catalog().replace('<section class="screen">','').replace('</section>','')}</section><div class="offline-banner">Нет сети · показываем сохранённые данные</div>`;
@@ -940,7 +965,10 @@ function completePayment() {
   prototypeState.lastOrderSpendCounted = true;
   if (usedPoints) addLoyaltyOperation({ title: "Оплата заказа SIM-00001", points: -usedPoints });
   addNotification({ title: "Заказ подтверждён", body: "Оплата получена · начинаем собирать заказ", screen: "order" });
-  track("order_completed", { order: "SIM-00001", attempt: prototypeState.paymentAttemptId, total: rub(prototypeState.lastOrderTotal), delivery: prototypeState.lastOrderDelivery, payment: prototypeState.lastOrderPayment });
+  const purchaseJourney = prototypeState.pendingPurchaseOrigin === "reorder" ? "repeat" : "first";
+  prototypeState.completedOrderCount = (Number(prototypeState.completedOrderCount) || 0) + 1;
+  track("order_completed", { order: "SIM-00001", attempt: prototypeState.paymentAttemptId, total: rub(prototypeState.lastOrderTotal), delivery: prototypeState.lastOrderDelivery, payment: prototypeState.lastOrderPayment, journey: purchaseJourney, order_number: prototypeState.completedOrderCount });
+  prototypeState.pendingPurchaseOrigin = "acquisition";
   prototypeState.points = Math.max(0, prototypeState.points - usedPoints);
   prototypeState.cartItems = {};
   prototypeState.cartVolumes = {};
@@ -1049,6 +1077,7 @@ document.addEventListener("click", async (event) => {
     prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty]));
     prototypeState.cartVolumes = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, volume = 15 }) => [id, volume]));
     prototypeState.promoApplied = false;
+    prototypeState.pendingPurchaseOrigin = "reorder";
     markCartSaved();
     track("reorder_started", { order: "SIM-00001", items: cartItemCount() });
     render("cart");
@@ -1574,6 +1603,24 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
+  if (action === "run-funnel-demo") {
+    const capturedAt = new Date().toISOString();
+    prototypeState.attribution = { source: "yandex", medium: "cpc", campaign: "summer_perfume", content: "mango_video_01", clickId: `yclid-demo-${Date.now().toString().slice(-5)}`, firstSeenAt: prototypeState.attribution.firstSeenAt || capturedAt, lastSeenAt: capturedAt, lastTarget: "product:mango-skin" };
+    track("attribution_captured", { source: "yandex", medium: "cpc", campaign: "summer_perfume", target: "product:mango-skin" });
+    track("deep_link_opened", { source: "yandex", target: "product:mango-skin" });
+    track("product_view", { product: "mango-skin" });
+    track("add_to_cart", { product: "mango-skin", volume: "15 мл", quantity: 1 });
+    track("checkout_started", { items: 1 });
+    track("payment_started", { method: "card", total: "449 ₽" });
+    track("order_completed", { order: "SIM-DEMO-01", total: "449 ₽", journey: "first" });
+    track("reorder_started", { order: "SIM-DEMO-01", items: 1 });
+    track("checkout_started", { items: 1, journey: "repeat" });
+    track("order_completed", { order: "SIM-DEMO-02", total: "449 ₽", journey: "repeat" });
+    saveState();
+    render("analytics", { remember: false });
+    toast("Демо-воронка заполнена");
+    return;
+  }
   if (action === "clear-analytics") {
     prototypeState.analyticsEvents = [];
     render("analytics", { remember: false });
@@ -1600,7 +1647,7 @@ document.addEventListener("click", async (event) => {
   const label = button?.textContent.trim() || "";
   if (label === "Перейти в каталог" || label === "Найти аромат" || label === "Выбрать аромат" || label === "Сбросить фильтры" || label === "Повторить") render("catalog");
   else if (label === "Попробовать ещё раз" || label === "Выбрать другой способ") render("checkout");
-  else if (label === "Повторить заказ") { prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty])); render("cart"); }
+  else if (label === "Повторить заказ") { prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty])); prototypeState.pendingPurchaseOrigin = "reorder"; track("reorder_started", { order: "SIM-00001", items: cartItemCount() }); render("cart"); }
   else if (button?.closest(".switch") || button?.classList.contains("switch")) button.classList.toggle("off");
 
 });
