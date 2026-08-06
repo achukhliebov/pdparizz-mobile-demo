@@ -383,6 +383,7 @@ const scenarios = [
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
   ["loyalty", "Лояльность"], ["loyalty-rules", "Правила лояльности"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
+  ["push-demo", "Push · сценарии"], ["attribution", "Атрибуция"],
   ["referral", "Рефералы"], ["referral-landing", "Реферал · приглашение"], ["referral-rules", "Реферал · правила"], ["referral-success", "Реферал · награда"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-rules", "Колесо · правила"], ["wheel-result", "Колесо · результат"],
   ["install", "Установка"], ["analytics", "Аналитика"], ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
   ["catalog-loading", "Loading"], ["catalog-empty", "Empty"], ["catalog-error", "Error"]
@@ -435,6 +436,8 @@ const defaultState = {
   loginPhone: "+7 999 123-45-67",
   pushOrders: true,
   pushMarketing: false,
+  attributionSessionId: `anon-${Math.random().toString(36).slice(2,10)}`,
+  attribution: { source: "Прямой переход", medium: "none", campaign: "—", content: "—", clickId: "—", firstSeenAt: null, lastSeenAt: null, lastTarget: "catalog" },
   orderStatus: "assembling",
   orderRewarded: false,
   orderCancelled: false,
@@ -445,7 +448,7 @@ const defaultState = {
   notificationFeed: [
     { id: "points-1", type: "points", title: "Баллы начислены", body: "+199 баллов за предыдущий доставленный заказ", time: "сегодня, 17:42", read: false, screen: "loyalty" },
     { id: "shipping-1", type: "order", title: "Заказ передан в доставку", body: "Курьер привезёт заказ завтра", time: "вчера, 09:30", read: false, screen: "order" },
-    { id: "collection-1", type: "marketing", title: "Новая коллекция", body: "Познакомьтесь с ароматами для тёплого вечера", time: "2 августа", read: true, screen: "catalog" }
+    { id: "collection-1", type: "marketing", title: "Mango Skin снова в наличии", body: "Откройте карточку аромата прямо из уведомления", time: "2 августа", read: true, screen: "product", productId: "mango-skin" }
   ],
   lastWheelSpinDate: "",
   lastWheelPrizeId: "",
@@ -514,16 +517,41 @@ if (!Array.isArray(prototypeState.notificationFeed)) prototypeState.notification
 if (!Array.isArray(prototypeState.supportMessages)) prototypeState.supportMessages = [...defaultState.supportMessages];
 if (!Array.isArray(prototypeState.loyaltyHistory)) prototypeState.loyaltyHistory = [...defaultState.loyaltyHistory];
 if (!Array.isArray(prototypeState.referralInvites)) prototypeState.referralInvites = [...defaultState.referralInvites];
+if (!prototypeState.attribution || typeof prototypeState.attribution !== "object") prototypeState.attribution = { ...defaultState.attribution };
 if (params.get("welcome") === "1") {
   screen = "onboarding";
   prototypeState.onboardingStep = 0;
 } else if (params.get("source") === "installed" && !prototypeState.onboardingCompleted) screen = "onboarding";
-const deepLinkProduct = params.get("product");
+const requestedTarget = (params.get("target") || "").trim().toLowerCase();
+const targetScreens = { order: "order", orders: "orders", offer: "offers", offers: "offers", loyalty: "loyalty", referral: "referral-landing", subscription: "subscription", wheel: "wheel", notifications: "notifications" };
+if (targetScreens[requestedTarget]) screen = targetScreens[requestedTarget];
+const deepLinkProduct = params.get("product") || (requestedTarget === "product" ? params.get("target_id") : "");
 if (deepLinkProduct && products.some((item) => item.id === deepLinkProduct)) {
   prototypeState.selectedProductId = deepLinkProduct;
   prototypeState.selectedVolume = 15;
   prototypeState.productQuantity = 1;
   screen = "product";
+}
+const incomingAttribution = {
+  source: (params.get("utm_source") || params.get("source") || "").trim(),
+  medium: (params.get("utm_medium") || "").trim(),
+  campaign: (params.get("utm_campaign") || "").trim(),
+  content: (params.get("utm_content") || "").trim(),
+  clickId: (params.get("click_id") || params.get("yclid") || params.get("vk_click_id") || "").trim()
+};
+const hasIncomingAttribution = Object.values(incomingAttribution).some(Boolean);
+if (hasIncomingAttribution) {
+  const capturedAt = new Date().toISOString();
+  prototypeState.attribution = {
+    source: incomingAttribution.source || "Неизвестный источник",
+    medium: incomingAttribution.medium || "app_link",
+    campaign: incomingAttribution.campaign || "Без названия",
+    content: incomingAttribution.content || "—",
+    clickId: incomingAttribution.clickId || "—",
+    firstSeenAt: prototypeState.attribution.firstSeenAt || capturedAt,
+    lastSeenAt: capturedAt,
+    lastTarget: deepLinkProduct ? `product:${deepLinkProduct}` : requestedTarget || screen
+  };
 }
 const incomingReferral = (params.get("ref") || "").trim().toUpperCase();
 if (incomingReferral && !prototypeState.referralRewardClaimed) {
@@ -531,6 +559,7 @@ if (incomingReferral && !prototypeState.referralRewardClaimed) {
   prototypeState.referralRewardPending = true;
   if (!prototypeState.referralFriendRegistered) prototypeState.referralFriendStage = "clicked";
 }
+const incomingDeepLink = Boolean(requestedTarget || deepLinkProduct || incomingReferral);
 const productById = (id) => products.find((item) => item.id === id) || products[0];
 const selectedProduct = () => productById(prototypeState.selectedProductId);
 const recordRecentView = (id) => {
@@ -572,8 +601,8 @@ const currentOrderStage = () => prototypeState.orderCancelled ? { id: "cancelled
 const orderStatusIndex = () => Math.max(0, orderStages.findIndex((item) => item.id === currentOrderStage().id));
 const canCancelOrder = () => !prototypeState.orderCancelled && ["confirmed", "assembling"].includes(prototypeState.orderStatus);
 const unreadNotifications = () => prototypeState.notificationFeed.filter((item) => !item.read).length;
-const addNotification = ({ type = "order", title, body, screen: targetScreen = "order" }) => {
-  prototypeState.notificationFeed.unshift({ id: `notification-${Date.now()}`, type, title, body, time: "только что", read: false, screen: targetScreen });
+const addNotification = ({ type = "order", title, body, screen: targetScreen = "order", productId = null }) => {
+  prototypeState.notificationFeed.unshift({ id: `notification-${Date.now()}`, type, title, body, time: "только что", read: false, screen: targetScreen, productId });
 };
 const addLoyaltyOperation = ({ title, points, date = "Сегодня" }) => {
   prototypeState.loyaltyHistory.unshift({ id: `loyalty-${Date.now()}-${Math.random().toString(16).slice(2)}`, title, date, points });
@@ -628,7 +657,7 @@ const eventLabels = {
   screen_view: "Открыт экран", product_view: "Открыт товар", favorite_toggle: "Изменено избранное",
   add_to_cart: "Добавлено в корзину", checkout_started: "Начато оформление", order_completed: "Оформлен заказ",
   login: "Вход выполнен", referral_reward: "Реферальный бонус", push_changed: "Настройка push",
-  subscription_changed: "Изменена подписка", subscription_checkout_started: "Начато оформление подписки", subscription_started: "Подписка активирована", subscription_cancelled: "Автопродление отключено", subscription_restored: "Автопродление включено", wheel_reward: "Получен подарок", install_requested: "Запрошена установка", referral_link_copied: "Скопирована реферальная ссылка", referral_registered: "Друг зарегистрирован", referral_first_order_reward: "Реферальная награда начислена",
+  subscription_changed: "Изменена подписка", subscription_checkout_started: "Начато оформление подписки", subscription_started: "Подписка активирована", subscription_cancelled: "Автопродление отключено", subscription_restored: "Автопродление включено", wheel_reward: "Получен подарок", install_requested: "Запрошена установка", referral_link_copied: "Скопирована реферальная ссылка", referral_registered: "Друг зарегистрирован", referral_first_order_reward: "Реферальная награда начислена", deep_link_opened: "Открыта deep link", attribution_captured: "Источник трафика сохранён", push_demo_sent: "Отправлен демо-push",
   onboarding_step: "Шаг onboarding", quiz_answer: "Ответ подбора", quiz_completed: "Подбор завершён",
   promo_opened: "Открыто промо", reorder_started: "Повторная покупка", variant_selected: "Выбран объём",
   buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы", delivery_selected: "Выбрана доставка",
@@ -809,7 +838,7 @@ const loyalty = () => { const tier = loyaltyTier(); const nextTier = loyaltyTier
 const loyaltyRules = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">PdParizz Club</p><h1>Как работают баллы</h1></div><span></span></div><div class="card"><h2>1 балл = 1 ₽</h2><p class="subtle">Оплачивайте баллами до 30% стоимости товаров. Доставка баллами не оплачивается.</p></div><div class="section-head"><h2>Уровни</h2></div>${loyaltyTiers.map((tier) => `<div class="card" style="margin-bottom:10px;${loyaltyTier().id === tier.id ? "border-color:#c99aa1;background:#fff8f8" : ""}"><div class="row between"><div><p class="eyebrow">${loyaltyTier().id === tier.id ? "Ваш уровень" : tier.next ? `Покупки от ${rub(tier.min)}` : `Покупки от ${rub(tier.min)}`}</p><h3>${tier.name}</h3><p class="subtle" style="margin:0">Возвращаем ${tier.cashback}% стоимости товаров баллами</p></div><strong>${tier.cashback}%</strong></div></div>`).join("")}<div class="section-head"><h2>Срок действия</h2></div><div class="card"><p class="subtle" style="margin:0">Баллы действуют 180 дней с даты начисления. Сначала списываются баллы с ближайшим сроком сгорания. Мы предупредим push-уведомлением за 14 дней.</p></div><div class="section-head"><h2>Важно</h2></div><div class="card"><p class="subtle" style="margin:0">Баллы начисляются после доставки заказа. При отмене использованные баллы возвращаются. Промоакции и подписка могут временно увеличивать начисление.</p></div></section>`;
 
 const profile = () => `<section class="screen"><p class="eyebrow">Личный кабинет</p><h1>Профиль</h1><div class="row" style="margin-top:28px"><div class="avatar">${prototypeState.profile.name.trim().charAt(0).toUpperCase() || "P"}</div><div><h2 style="margin-bottom:5px">${prototypeState.profile.name}</h2><p class="subtle">${prototypeState.profile.phone}</p></div></div>
-  <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="offers"><span>Персональные предложения</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="install"><span>${isStandalone() ? "Приложение установлено" : "Установить на телефон"}</span><b>›</b></div><div class="menu-row" data-screen="analytics"><span>События MVP</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
+  <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="offers"><span>Персональные предложения</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="push-demo"><span>Push и deep links</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="install"><span>${isStandalone() ? "Приложение установлено" : "Установить на телефон"}</span><b>›</b></div><div class="menu-row" data-screen="analytics"><span>События MVP</span><b>›</b></div><div class="menu-row" data-screen="attribution"><span>Источники трафика</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
   ${bottomNav("profile")}</section>`;
 
 const authPhone = () => `<section class="screen with-action" style="padding-top:70px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 24px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#c99aa1;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>По 300 баллов каждому</h3><p class="subtle" style="margin:0">Код ${prototypeState.referralCode}. Награда разблокируется после доставки вашего первого заказа.</p></div>` : ""}<div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" /></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button></div></section>`;
@@ -820,7 +849,11 @@ const profileEdit = () => `<section class="screen with-action"><div class="topli
 
 const addresses = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Адреса</h1><span></span></div>${prototypeState.addresses.map((address) => `<button class="card choice-card ${address.id === prototypeState.selectedAddressId ? "selected" : ""}" data-action="select-address" data-address-id="${address.id}"><div class="row between"><div><p class="eyebrow">${address.id === prototypeState.selectedAddressId ? "Выбран" : "Адрес"}</p><h3>${address.label}</h3></div><span>${address.id === prototypeState.selectedAddressId ? "✓" : "○"}</span></div><p class="subtle" style="margin:8px 0 0">${address.line}${address.details ? `<br>${address.details}` : ""}</p></button>`).join("")}<div class="section-head"><h2>Новый адрес</h2></div><div class="field"><label>Название</label><input id="new-address-label" placeholder="Например, Дача" /></div><div class="field"><label>Адрес</label><input id="new-address-line" placeholder="Город, улица, дом, квартира" /></div><button class="primary rose" data-action="add-address">Добавить адрес</button>${bottomNav("profile")}</section>`;
 
-const notifications = () => prototypeState.notificationFeed.length ? `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div><button class="chip" data-action="mark-notifications" ${unreadNotifications() ? "" : "disabled"}>Прочитать все</button></div>${prototypeState.notificationFeed.map((item) => `<button class="card notification-card ${item.read ? "" : "unread"}" data-action="open-notification" data-notification-id="${item.id}"><div class="row" style="align-items:flex-start"><span class="${item.type === "points" ? "coin" : "state-icon"}" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">${item.type === "points" ? "P" : item.type === "marketing" ? "◇" : "✓"}</span><div class="notification-copy"><div class="row between"><h3>${item.title}</h3>${item.read ? "" : `<span class="notification-dot"></span>`}</div><p class="subtle">${item.body}</p><small class="subtle">${item.time}</small></div></div></button>`).join("")}${bottomNav("profile")}</section>` : notificationsEmpty();
+const notifications = () => prototypeState.notificationFeed.length ? `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div><button class="chip" data-screen="push-demo">Тест push</button></div><div class="row between" style="margin-bottom:14px"><span class="subtle">${unreadNotifications()} непрочитанных</span><button class="chip" data-action="mark-notifications" ${unreadNotifications() ? "" : "disabled"}>Прочитать все</button></div>${prototypeState.notificationFeed.map((item) => `<button class="card notification-card ${item.read ? "" : "unread"}" data-action="open-notification" data-notification-id="${item.id}"><div class="row" style="align-items:flex-start"><span class="${item.type === "points" ? "coin" : "state-icon"}" style="width:38px;height:38px;margin:0;flex:none;font-size:16px">${item.type === "points" ? "P" : item.type === "marketing" ? "◇" : "✓"}</span><div class="notification-copy"><div class="row between"><h3>${item.title}</h3>${item.read ? "" : `<span class="notification-dot"></span>`}</div><p class="subtle">${item.body}</p><small class="subtle">${item.time}</small></div></div></button>`).join("")}${bottomNav("profile")}</section>` : notificationsEmpty();
+
+const pushDemo = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Центр сценариев</p><h1>Push и deep links</h1></div><span></span></div><p class="subtle" style="margin:-6px 0 20px">Каждая карточка имитирует нажатие на уведомление и открывает нужный экран внутри приложения.</p>${[["product","mango-skin","◇","Mango Skin снова в наличии","Открыть конкретную карточку товара"],["order","","✓","Курьер уже в пути","Открыть отслеживание заказа"],["offers","","%","Скидка 15% до вечера","Открыть персональные предложения"],["loyalty","","P","120 баллов скоро сгорят","Открыть баланс и историю"]].map(([target,productId,symbol,title,body]) => `<button class="card notification-card unread" data-action="simulate-push" data-target="${target}" data-product-id="${productId}" style="margin-bottom:11px"><div class="row"><span class="state-icon" style="width:42px;height:42px;margin:0;font-size:16px">${symbol}</span><div class="notification-copy"><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div><strong>›</strong></div></button>`).join("")}<div class="section-head"><h2>Рекламная ссылка</h2></div><button class="card" data-action="simulate-ad-link" style="width:100%;text-align:left;border-color:#d6b56d;background:#fffaf0"><div class="row between"><div><p class="eyebrow">Яндекс · summer_perfume</p><h3>Реклама → Mango Skin</h3><p class="subtle" style="margin:0">Сохранить UTM и открыть товар</p></div><strong>›</strong></div></button><button class="chip" data-screen="attribution" style="width:100%;margin-top:14px">Посмотреть атрибуцию</button></section>`;
+
+const attribution = () => { const attr = prototypeState.attribution; return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Маркетинговая аналитика</p><h1>Источник трафика</h1></div><span></span></div><div class="card" style="background:#24201d;color:#fff;border:0"><p class="eyebrow" style="color:#d9b46a">Последний источник</p><h2 style="margin-bottom:5px">${attr.source}</h2><p class="subtle" style="color:#cfc7bf;margin:0">${attr.medium} · ${attr.campaign}</p></div><div class="section-head"><h2>Параметры перехода</h2></div><div class="card"><div class="row between"><span class="subtle">Кампания</span><strong>${attr.campaign}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Объявление</span><strong>${attr.content}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Click ID</span><strong style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${attr.clickId}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Целевой экран</span><strong>${attr.lastTarget}</strong></div></div><div class="section-head"><h2>Что передадим в аналитику</h2></div><div class="card"><div class="install-step"><span class="step-number">1</span><div><h3>Переход</h3><p class="subtle" style="margin:0">Источник, кампания и целевой экран без телефона и имени.</p></div></div><div class="install-step"><span class="step-number">2</span><div><h3>Конверсия</h3><p class="subtle" style="margin:0">Добавление в корзину, оплата и доставленный заказ.</p></div></div><div class="install-step"><span class="step-number">3</span><div><h3>Возврат</h3><p class="subtle" style="margin:0">Открытие push и повторная покупка.</p></div></div></div><p class="subtle" style="margin-top:16px">Анонимная сессия ${prototypeState.attributionSessionId}. В MVP данные хранятся только на устройстве.</p></section>`; };
 
 const notificationsEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div></div><div class="state-panel"><div><div class="state-icon">◌</div><h2>Пока тихо</h2><p class="subtle">Здесь появятся статусы заказов, начисления баллов и важные новости.</p></div></div>${bottomNav("profile")}</section>`;
 
@@ -860,7 +893,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1231,8 +1264,44 @@ document.addEventListener("click", async (event) => {
     const notification = prototypeState.notificationFeed.find((item) => item.id === actionTarget.dataset.notificationId);
     if (!notification) return;
     notification.read = true;
+    if (notification.productId) {
+      prototypeState.selectedProductId = notification.productId;
+      prototypeState.selectedVolume = 15;
+      prototypeState.productQuantity = 1;
+      recordRecentView(notification.productId);
+    }
     track("push_opened", { notification: notification.type, target: notification.screen });
+    track("deep_link_opened", { source: "push", target: notification.productId ? `product:${notification.productId}` : notification.screen });
     render(notification.screen || "notifications");
+    return;
+  }
+  if (action === "simulate-push") {
+    const target = actionTarget.dataset.target || "catalog";
+    const productId = actionTarget.dataset.productId;
+    if (productId) {
+      prototypeState.selectedProductId = productId;
+      prototypeState.selectedVolume = 15;
+      prototypeState.productQuantity = 1;
+      recordRecentView(productId);
+    }
+    track("push_demo_sent", { target: productId ? `product:${productId}` : target });
+    track("push_opened", { notification: "demo", target });
+    track("deep_link_opened", { source: "push", target: productId ? `product:${productId}` : target });
+    render(target);
+    toast("Открыто из push-уведомления");
+    return;
+  }
+  if (action === "simulate-ad-link") {
+    const capturedAt = new Date().toISOString();
+    prototypeState.attribution = { source: "yandex", medium: "cpc", campaign: "summer_perfume", content: "mango_video_01", clickId: `yclid-${Date.now().toString().slice(-6)}`, firstSeenAt: prototypeState.attribution.firstSeenAt || capturedAt, lastSeenAt: capturedAt, lastTarget: "product:mango-skin" };
+    prototypeState.selectedProductId = "mango-skin";
+    prototypeState.selectedVolume = 15;
+    prototypeState.productQuantity = 1;
+    recordRecentView("mango-skin");
+    track("attribution_captured", { source: "yandex", medium: "cpc", campaign: "summer_perfume" });
+    track("deep_link_opened", { source: "ad", target: "product:mango-skin" });
+    render("product");
+    toast("Источник yandex сохранён");
     return;
   }
   if (action === "next-order-status") {
@@ -1559,7 +1628,11 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").ca
 if (deepLinkProduct) { recordRecentView(deepLinkProduct); track("product_view", { product: deepLinkProduct, source: "deep_link" }); }
 if (params.get("source") === "installed") track("screen_view", { screen: "installed_launch" });
 render(screen, { remember: false });
+if (hasIncomingAttribution) track("attribution_captured", { source: prototypeState.attribution.source, medium: prototypeState.attribution.medium, campaign: prototypeState.attribution.campaign, target: prototypeState.attribution.lastTarget });
+if (incomingDeepLink) track("deep_link_opened", { source: prototypeState.attribution.source, target: deepLinkProduct ? `product:${deepLinkProduct}` : requestedTarget || screen });
+if (hasIncomingAttribution || incomingDeepLink) saveState();
 if (incomingReferral && prototypeState.referralRewardPending) setTimeout(() => toast("Реферальный подарок готов · войдите, чтобы получить 300 баллов"), 250);
+else if (incomingDeepLink) setTimeout(() => toast(`Открыто по ссылке · ${deepLinkProduct ? productById(deepLinkProduct).name : screen}`), 250);
 
 </script>
   </body>
