@@ -258,6 +258,7 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .order-card { margin-bottom: 12px; }
 .order-card .order-number { font-weight: 800; font-size: 14px; }
 .status { display: inline-flex; padding: 6px 9px; border-radius: 999px; background: #e7f3ec; color: var(--success); font-size: 10px; font-weight: 800; }
+.status.cancelled { background: #f1e9e7; color: #8b4a43; }
 .timeline { margin: 22px 0 0 8px; }
 .timeline-item { position: relative; padding: 0 0 24px 28px; border-left: 1px solid #d6cec3; }
 .timeline-item::before { content: ""; position: absolute; left: -6px; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); border: 2px solid #bcb3a8; }
@@ -268,6 +269,11 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .notification-card.unread { border-color: #c99aa1; background: #fff8f8; }
 .notification-card .notification-copy { flex: 1; min-width: 0; }
 .notification-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--rose); }
+.chat-thread { display: grid; gap: 10px; margin: 18px 0; }
+.chat-bubble { max-width: 84%; padding: 11px 13px; border-radius: 16px 16px 16px 4px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; line-height: 1.4; }
+.chat-bubble.mine { margin-left: auto; border-radius: 16px 16px 4px 16px; background: var(--rose); border-color: var(--rose); color: #fff; }
+.support-composer { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.support-composer input { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 0 13px; }
 
 .loyalty-hero { padding: 22px; border-radius: 24px; color: #fff; background: linear-gradient(135deg, #24201d, #5c4a3b); overflow: hidden; position: relative; }
 .loyalty-hero::after { content: "P"; position: absolute; right: 12px; top: -34px; font: 150px Georgia, serif; color: rgba(255,255,255,.06); }
@@ -347,7 +353,7 @@ const scenarios = [
   ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
   ["checkout", "Оформление"], ["pickup", "Пункты выдачи"], ["order-success", "Заказ оформлен"], ["orders", "Заказы"], ["order", "Заказ"], ["offers", "Предложения"],
-  ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"],
+  ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
   ["loyalty", "Лояльность"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
   ["referral", "Рефералы"], ["subscription", "Подписка"], ["wheel", "Колесо"], ["wheel-result", "Колесо · результат"],
@@ -387,6 +393,11 @@ const defaultState = {
   pushMarketing: false,
   orderStatus: "assembling",
   orderRewarded: false,
+  orderCancelled: false,
+  orderRefunded: false,
+  lastOrderPointsUsed: 500,
+  selectedCancelReason: "changed-mind",
+  supportMessages: [{ id: "welcome", mine: false, text: "Здравствуйте! Я помогу с заказом SIM-00001. Что случилось?" }],
   notificationFeed: [
     { id: "points-1", type: "points", title: "Баллы начислены", body: "+199 баллов за предыдущий доставленный заказ", time: "сегодня, 17:42", read: false, screen: "loyalty" },
     { id: "shipping-1", type: "order", title: "Заказ передан в доставку", body: "Курьер привезёт заказ завтра", time: "вчера, 09:30", read: false, screen: "order" },
@@ -438,6 +449,7 @@ if (!Array.isArray(prototypeState.addresses) || !prototypeState.addresses.length
 if (!Array.isArray(prototypeState.analyticsEvents)) prototypeState.analyticsEvents = [];
 if (!Array.isArray(prototypeState.claimedOfferIds)) prototypeState.claimedOfferIds = [];
 if (!Array.isArray(prototypeState.notificationFeed)) prototypeState.notificationFeed = [...defaultState.notificationFeed];
+if (!Array.isArray(prototypeState.supportMessages)) prototypeState.supportMessages = [...defaultState.supportMessages];
 if (params.get("welcome") === "1") {
   screen = "onboarding";
   prototypeState.onboardingStep = 0;
@@ -479,8 +491,9 @@ const orderStages = [
   { id: "shipping", label: "В пути", title: "Передан в доставку", body: "Курьер СДЭК уже в пути" },
   { id: "delivered", label: "Доставлен", title: "Заказ доставлен", body: "Спасибо за покупку" }
 ];
-const currentOrderStage = () => orderStages.find((item) => item.id === prototypeState.orderStatus) || orderStages[1];
+const currentOrderStage = () => prototypeState.orderCancelled ? { id: "cancelled", label: "Отменён", title: "Заказ отменён", body: "Деньги и баллы возвращены" } : orderStages.find((item) => item.id === prototypeState.orderStatus) || orderStages[1];
 const orderStatusIndex = () => Math.max(0, orderStages.findIndex((item) => item.id === currentOrderStage().id));
+const canCancelOrder = () => !prototypeState.orderCancelled && ["confirmed", "assembling"].includes(prototypeState.orderStatus);
 const unreadNotifications = () => prototypeState.notificationFeed.filter((item) => !item.read).length;
 const addNotification = ({ type = "order", title, body, screen: targetScreen = "order" }) => {
   prototypeState.notificationFeed.unshift({ id: `notification-${Date.now()}`, type, title, body, time: "только что", read: false, screen: targetScreen });
@@ -500,7 +513,8 @@ const eventLabels = {
   buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы", delivery_selected: "Выбрана доставка",
   payment_selected: "Выбрана оплата", pickup_selected: "Выбран пункт выдачи", delivery_slot_selected: "Выбран интервал",
   offer_activated: "Активировано предложение", order_status_changed: "Изменён статус заказа",
-  push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления"
+  push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления",
+  order_cancelled: "Отменён заказ", support_message_sent: "Сообщение в поддержку"
 };
 const track = (name, data = {}) => {
   prototypeState.analyticsEvents.unshift({ name, data, at: Date.now() });
@@ -626,17 +640,23 @@ const pickup = () => { const current = selectedPickup(); return `<section class=
 const orderSuccess = () => `<section class="screen"><div class="state-panel" style="min-height:690px"><div><div class="state-icon" style="width:92px;height:92px;font-size:40px;background:#e7f3ec;color:var(--success)">✓</div><p class="eyebrow">Спасибо за покупку</p><h1 style="font-size:38px">Заказ оформлен</h1><p class="subtle" style="margin:8px auto 0">Номер SIM-00001</p><p class="subtle" style="margin:14px auto 24px;max-width:300px">Отправим push, когда заказ будет собран и передан в доставку.</p><div class="card" style="text-align:left"><div class="row between"><span class="subtle">Доставка</span><strong>${prototypeState.lastOrderDelivery}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Оплата</span><strong>${prototypeState.lastOrderPayment}</strong></div><div class="row between" style="margin-top:14px"><span class="subtle">Сумма</span><strong>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)}</strong></div></div><button class="primary rose" data-screen="order" style="margin-top:18px">Следить за заказом</button><button class="chip" data-screen="catalog" style="margin-top:12px">Вернуться в каталог</button></div></div></section>`;
 
 const orders = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const count = entries.reduce((sum, entry) => sum + entry.qty, 0); const first = productById(entries[0]?.id); return `<section class="screen"><div class="topline"><div><p class="eyebrow">Личный кабинет</p><h1>Мои заказы</h1></div></div>
-  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status">${currentOrderStage().label}</span></div><p class="subtle">Сегодня · ${count} ${count === 1 ? "товар" : "товара"}</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px"><img src="${first.image}" alt="${first.name}" referrerpolicy="no-referrer" /></div></div><strong>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)} ›</strong></div></article>
+  <article class="card order-card" data-screen="order"><div class="row between"><span class="order-number">SIM-00001</span><span class="status ${prototypeState.orderCancelled ? "cancelled" : ""}">${currentOrderStage().label}</span></div><p class="subtle">Сегодня · ${count} ${count === 1 ? "товар" : "товара"}</p><div class="row between"><div class="row"><div class="thumb" style="width:48px;height:56px"><img src="${first.image}" alt="${first.name}" referrerpolicy="no-referrer" /></div></div><strong>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)} ›</strong></div></article>
   <article class="card order-card" data-screen="order-delivered"><div class="row between"><span class="order-number">SIM-00000</span><span class="status">Доставлен</span></div><p class="subtle">17 июля · 1 товар</p><div class="row between"><div class="thumb" style="width:48px;height:56px">${bottle}</div><strong>${rub(229000)} ›</strong></div></article>
   ${bottomNav("orders")}</section>`; };
 
-const order = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const stageIndex = orderStatusIndex(); const stage = currentOrderStage(); return `<section class="screen ${stage.id === "delivered" ? "" : "with-action"}"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status">${stage.label}</span></div>
+const order = () => { const entries = prototypeState.lastOrder || defaultState.lastOrder; const stageIndex = orderStatusIndex(); const stage = currentOrderStage(); return `<section class="screen ${["delivered","cancelled"].includes(stage.id) ? "" : "with-action"}"><div class="topline"><button class="back-btn">‹</button><div><p class="eyebrow">Заказ</p><h1>SIM-00001</h1></div><span class="status ${stage.id === "cancelled" ? "cancelled" : ""}">${stage.label}</span></div>
   <div class="card"><div class="row between"><span class="subtle">Доставка</span><strong>${prototypeState.lastOrderDelivery}</strong></div><div class="row between" style="margin-top:12px"><span class="subtle">Оплата</span><strong>${prototypeState.lastOrderPayment}</strong></div></div>
-  <div class="timeline">${orderStages.map((item, index) => `<div class="timeline-item ${index <= stageIndex ? "done" : ""}"><h3>${item.title}</h3><p class="subtle">${index < stageIndex ? "Выполнено" : index === stageIndex ? item.body : "Ожидается"}</p></div>`).join("")}</div>
+  <div class="timeline">${stage.id === "cancelled" ? `<div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">Оплата была получена</p></div><div class="timeline-item done"><h3>Заказ отменён</h3><p class="subtle">Возврат оформлен автоматически</p></div>` : orderStages.map((item, index) => `<div class="timeline-item ${index <= stageIndex ? "done" : ""}"><h3>${item.title}</h3><p class="subtle">${index < stageIndex ? "Выполнено" : index === stageIndex ? item.body : "Ожидается"}</p></div>`).join("")}</div>
   ${stage.id === "delivered" ? `<div class="card loyalty-toggle"><div class="row"><span class="coin">P</span><div><h3>Баллы начислены</h3><p class="subtle" style="margin:0">Награда уже в вашем кошельке</p></div></div></div>` : ""}
+  ${stage.id === "cancelled" ? `<div class="card loyalty-toggle"><div class="row"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">↩</span><div><h3>Возврат оформлен</h3><p class="subtle" style="margin:0">${prototypeState.lastOrderPointsUsed ? `${prototypeState.lastOrderPointsUsed} баллов уже возвращены` : "Деньги вернутся тем же способом"}</p></div></div></div>` : ""}
   <div class="card">${entries.map(({ id, qty, volume = 15 }) => { const item = productById(id); const unitPrice = volumePrice(item, volume); return `<div class="cart-line"><div class="thumb"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${qty} × ${rub(unitPrice)}</p></div><strong>${rub(unitPrice * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>Оплачено</span><span>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)}</span></div></div></div>
-  ${stage.id === "delivered" ? `<button class="primary" data-action="reorder">Повторить заказ</button>` : `<div class="fixed-action"><button class="primary rose" data-action="next-order-status">Демо: следующий статус</button></div>`}
+  <button class="chip" data-screen="support" style="width:100%;margin-top:12px">Помощь с заказом</button>
+  ${stage.id === "delivered" || stage.id === "cancelled" ? `<button class="primary" data-action="reorder" style="margin-top:10px">Повторить заказ</button>` : `<div class="row" style="margin-top:12px">${canCancelOrder() ? `<button class="chip" data-screen="order-cancel">Отменить заказ</button>` : `<span class="subtle">После передачи курьеру отмена доступна через поддержку.</span>`}</div><div class="fixed-action"><button class="primary rose" data-action="next-order-status">Демо: следующий статус</button></div>`}
 </section>`; };
+
+const orderCancel = () => { const reasons = [["changed-mind","Передумал(а)"],["wrong-items","Ошибка в составе"],["delivery-time","Не подходит доставка"],["other","Другая причина"]]; return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Заказ SIM-00001</p><h1>Отмена заказа</h1></div><span></span></div><p class="subtle">До передачи в доставку заказ можно отменить сразу. Деньги и использованные баллы вернутся автоматически.</p><div class="section-head"><h2>Укажите причину</h2></div>${reasons.map(([id,label]) => `<button class="card choice-card ${prototypeState.selectedCancelReason === id ? "selected" : ""}" data-action="cancel-reason" data-reason="${id}"><div class="row between"><strong>${label}</strong><span>${prototypeState.selectedCancelReason === id ? "●" : "○"}</span></div></button>`).join("")}<div class="fixed-action"><button class="primary rose" data-action="confirm-cancel">Подтвердить отмену</button></div></section>`; };
+
+const support = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Обычно отвечаем сразу</p><h1>Поддержка</h1></div><span class="status">Онлайн</span></div><div class="chips">${["Где мой заказ?","Изменить доставку","Вопрос по оплате"].map((topic) => `<button class="chip" data-action="support-topic" data-topic="${topic}">${topic}</button>`).join("")}</div><div class="chat-thread">${prototypeState.supportMessages.map((message) => `<div class="chat-bubble ${message.mine ? "mine" : ""}">${message.text}</div>`).join("")}</div><div class="support-composer"><input id="support-message" aria-label="Сообщение в поддержку" placeholder="Напишите сообщение" /><button class="primary rose" data-action="send-support" style="width:52px">↑</button></div><p class="subtle" style="margin-top:12px">В MVP диалог сохраняется только на этом устройстве.</p></section>`;
 
 const paymentError = () => `<section class="screen"><div class="topline"><button class="back-btn">‹</button><h1>Оплата</h1><span></span></div><div class="state-panel"><div><div class="state-icon">!</div><p class="eyebrow">Баллы снова доступны</p><h2>Оплата не прошла</h2><p class="subtle">Банк отклонил операцию. Мы не списали деньги, а резерв 500 баллов уже снят.</p><button class="primary rose" style="padding:0 28px;width:auto;margin-bottom:12px">Попробовать ещё раз</button><button class="chip" style="display:block;margin:auto">Выбрать другой способ</button></div></div></section>`;
 
@@ -684,7 +704,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, profile, addresses, notifications, referral, subscription, wheel, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -993,6 +1013,41 @@ document.addEventListener("click", async (event) => {
     toast(prototypeState.pushOrders ? `Push: ${nextStage.title}` : `Статус обновлён: ${nextStage.label}`);
     return;
   }
+  if (action === "cancel-reason") {
+    prototypeState.selectedCancelReason = actionTarget.dataset.reason || "other";
+    render("order-cancel", { remember: false });
+    return;
+  }
+  if (action === "confirm-cancel") {
+    if (!canCancelOrder()) { render("order"); toast("Заказ уже нельзя отменить автоматически"); return; }
+    prototypeState.orderCancelled = true;
+    if (!prototypeState.orderRefunded && prototypeState.lastOrderPointsUsed) {
+      prototypeState.points += prototypeState.lastOrderPointsUsed;
+      prototypeState.orderRefunded = true;
+    }
+    addNotification({ title: "Заказ отменён", body: prototypeState.lastOrderPointsUsed ? `${prototypeState.lastOrderPointsUsed} баллов возвращены на баланс` : "Возврат оформлен тем же способом оплаты", screen: "order" });
+    track("order_cancelled", { order: "SIM-00001", reason: prototypeState.selectedCancelReason });
+    render("order");
+    toast("Заказ отменён · возврат оформлен");
+    return;
+  }
+  if (action === "support-topic") {
+    const topic = actionTarget.dataset.topic || "Вопрос по заказу";
+    prototypeState.supportMessages.push({ id: `support-${Date.now()}`, mine: true, text: topic });
+    prototypeState.supportMessages.push({ id: `support-reply-${Date.now()}`, mine: false, text: topic === "Где мой заказ?" ? `Сейчас статус: «${currentOrderStage().label}». Мы пришлём push при следующем изменении.` : "Принято. Специалист подключится к диалогу и увидит данные заказа." });
+    track("support_message_sent", { topic });
+    render("support", { remember: false });
+    return;
+  }
+  if (action === "send-support") {
+    const message = (document.querySelector("#support-message")?.value || "").trim();
+    if (!message) { toast("Напишите сообщение"); return; }
+    prototypeState.supportMessages.push({ id: `support-${Date.now()}`, mine: true, text: message });
+    prototypeState.supportMessages.push({ id: `support-reply-${Date.now()}`, mine: false, text: "Спасибо, сообщение получено. В рабочем приложении здесь ответит оператор PdParizz." });
+    track("support_message_sent", { topic: "custom" });
+    render("support", { remember: false });
+    return;
+  }
   if (action === "select-address") {
     prototypeState.selectedAddressId = actionTarget.dataset.addressId;
     render("addresses", { remember: false });
@@ -1021,6 +1076,9 @@ document.addEventListener("click", async (event) => {
     prototypeState.lastOrderPayment = paymentLabels[prototypeState.paymentMethod] || paymentLabels.card;
     prototypeState.orderStatus = "confirmed";
     prototypeState.orderRewarded = false;
+    prototypeState.orderCancelled = false;
+    prototypeState.orderRefunded = false;
+    prototypeState.lastOrderPointsUsed = Math.round(usedPointsMinor / 100);
     addNotification({ title: "Заказ подтверждён", body: "Оплата получена · начинаем собирать заказ", screen: "order" });
     track("order_completed", { order: "SIM-00001", total: rub(prototypeState.lastOrderTotal), delivery: prototypeState.lastOrderDelivery, payment: prototypeState.lastOrderPayment });
     prototypeState.points = Math.max(0, prototypeState.points - Math.round(usedPointsMinor / 100));
