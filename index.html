@@ -383,7 +383,7 @@ const scenarios = [
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
   ["loyalty", "Лояльность"], ["loyalty-rules", "Правила лояльности"], ["profile", "Профиль"], ["profile-edit", "Редактирование"], ["addresses", "Адреса"],
   ["notifications", "Уведомления"], ["notifications-empty", "Уведомления · empty"],
-  ["referral", "Рефералы"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-rules", "Колесо · правила"], ["wheel-result", "Колесо · результат"],
+  ["referral", "Рефералы"], ["referral-landing", "Реферал · приглашение"], ["referral-rules", "Реферал · правила"], ["referral-success", "Реферал · награда"], ["subscription", "Подписка"], ["subscription-checkout", "Подписка · оформление"], ["subscription-processing", "Подписка · обработка"], ["subscription-success", "Подписка · готово"], ["subscription-cancel", "Подписка · отмена"], ["wheel", "Колесо"], ["wheel-rules", "Колесо · правила"], ["wheel-result", "Колесо · результат"],
   ["install", "Установка"], ["analytics", "Аналитика"], ["privacy", "Конфиденциальность"], ["offline", "Офлайн-режим"],
   ["catalog-loading", "Loading"], ["catalog-empty", "Empty"], ["catalog-error", "Error"]
 ];
@@ -455,6 +455,15 @@ const defaultState = {
   referralCode: "",
   referralRewardPending: false,
   referralRewardClaimed: false,
+  referralFriendRegistered: false,
+  referralFriendStage: "none",
+  referralDemoActive: false,
+  referralInvites: [
+    { id: "invite-anna", name: "Анна", stage: "rewarded", label: "Награда начислена", date: "2 августа" },
+    { id: "invite-maria", name: "Мария", stage: "rewarded", label: "Награда начислена", date: "28 июля" },
+    { id: "invite-sergey", name: "Сергей", stage: "ordered", label: "Ждём доставку заказа", date: "Сегодня" },
+    { id: "invite-new", name: "Новый переход", stage: "clicked", label: "Ещё не зарегистрирован", date: "Сегодня" }
+  ],
   analyticsEvents: [],
   onboardingStep: 0,
   onboardingCompleted: false,
@@ -504,6 +513,7 @@ if (!Array.isArray(prototypeState.claimedOfferIds)) prototypeState.claimedOfferI
 if (!Array.isArray(prototypeState.notificationFeed)) prototypeState.notificationFeed = [...defaultState.notificationFeed];
 if (!Array.isArray(prototypeState.supportMessages)) prototypeState.supportMessages = [...defaultState.supportMessages];
 if (!Array.isArray(prototypeState.loyaltyHistory)) prototypeState.loyaltyHistory = [...defaultState.loyaltyHistory];
+if (!Array.isArray(prototypeState.referralInvites)) prototypeState.referralInvites = [...defaultState.referralInvites];
 if (params.get("welcome") === "1") {
   screen = "onboarding";
   prototypeState.onboardingStep = 0;
@@ -519,6 +529,7 @@ const incomingReferral = (params.get("ref") || "").trim().toUpperCase();
 if (incomingReferral && !prototypeState.referralRewardClaimed) {
   prototypeState.referralCode = incomingReferral;
   prototypeState.referralRewardPending = true;
+  if (!prototypeState.referralFriendRegistered) prototypeState.referralFriendStage = "clicked";
 }
 const productById = (id) => products.find((item) => item.id === id) || products[0];
 const selectedProduct = () => productById(prototypeState.selectedProductId);
@@ -617,7 +628,7 @@ const eventLabels = {
   screen_view: "Открыт экран", product_view: "Открыт товар", favorite_toggle: "Изменено избранное",
   add_to_cart: "Добавлено в корзину", checkout_started: "Начато оформление", order_completed: "Оформлен заказ",
   login: "Вход выполнен", referral_reward: "Реферальный бонус", push_changed: "Настройка push",
-  subscription_changed: "Изменена подписка", subscription_checkout_started: "Начато оформление подписки", subscription_started: "Подписка активирована", subscription_cancelled: "Автопродление отключено", subscription_restored: "Автопродление включено", wheel_reward: "Получен подарок", install_requested: "Запрошена установка",
+  subscription_changed: "Изменена подписка", subscription_checkout_started: "Начато оформление подписки", subscription_started: "Подписка активирована", subscription_cancelled: "Автопродление отключено", subscription_restored: "Автопродление включено", wheel_reward: "Получен подарок", install_requested: "Запрошена установка", referral_link_copied: "Скопирована реферальная ссылка", referral_registered: "Друг зарегистрирован", referral_first_order_reward: "Реферальная награда начислена",
   onboarding_step: "Шаг onboarding", quiz_answer: "Ответ подбора", quiz_completed: "Подбор завершён",
   promo_opened: "Открыто промо", reorder_started: "Повторная покупка", variant_selected: "Выбран объём",
   buy_now: "Быстрая покупка", reviews_opened: "Открыты отзывы", delivery_selected: "Выбрана доставка",
@@ -690,6 +701,7 @@ const catalog = () => `<section class="screen">
   <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
+  ${prototypeState.referralRewardPending && prototypeState.referralFriendRegistered ? `<button class="card" data-action="${prototypeState.referralDemoActive ? "referral-demo-order" : ""}" data-screen="${prototypeState.referralDemoActive ? "" : "product"}" data-product-id="hayati" style="width:100%;text-align:left;margin-bottom:14px;border-color:#d6b56d;background:#fffaf0"><div class="row between"><div><p class="eyebrow">Подарок закреплён</p><h3>По 300 баллов вам и другу</h3><p class="subtle" style="margin:0">Оформите и получите первый заказ</p></div><strong>›</strong></div></button>` : ""}
   ${cartItemCount() && !prototypeState.cartRecoveryDismissed ? `<div class="card recovery-card"><div class="row between" style="align-items:flex-start"><button data-screen="cart" data-action="recover-cart" style="flex:1;border:0;background:transparent;color:inherit;text-align:left;padding:0"><p class="eyebrow" style="color:#d9b46a">Сохранили для вас</p><h2 style="margin-bottom:6px">В корзине ${cartItemCount()} ${cartItemCount() === 1 ? "аромат" : "аромата"}</h2><p class="subtle" style="margin:0">Продолжить оформление · ${rub(cartGoodsMinor())} →</p></button><button class="chip" data-action="dismiss-cart-recovery" style="color:#fff;border-color:#77685d">Скрыть</button></div></div>` : ""}
   <button class="card" data-screen="offers" style="width:100%;text-align:left;margin-bottom:12px;border-color:#d9b6bb;background:#fff7f8"><div class="row between"><div><p class="eyebrow">Только для вас</p><h3>Скидка 15% и бесплатная доставка</h3><p class="subtle" style="margin:0">Активируйте предложения перед заказом</p></div><strong>›</strong></div></button>
   <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#d9b46a">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfc7bf;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
@@ -800,7 +812,7 @@ const profile = () => `<section class="screen"><p class="eyebrow">Личный �
   <div class="menu"><div class="menu-row" data-screen="profile-edit"><span>Личные данные</span><b>›</b></div><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="favorites"><span>Избранное</span><b>›</b></div><div class="menu-row" data-screen="offers"><span>Персональные предложения</span><b>›</b></div><div class="menu-row" data-screen="notifications"><span>Уведомления</span><b>›</b></div><div class="menu-row" data-screen="referral"><span>Пригласить друзей</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><div class="menu-row" data-screen="install"><span>${isStandalone() ? "Приложение установлено" : "Установить на телефон"}</span><b>›</b></div><div class="menu-row" data-screen="analytics"><span>События MVP</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
   ${bottomNav("profile")}</section>`;
 
-const authPhone = () => `<section class="screen with-action" style="padding-top:70px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 24px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#c99aa1;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>Код ${prototypeState.referralCode}</h3><p class="subtle" style="margin:0">После входа начислим 300 приветственных баллов.</p></div>` : ""}<div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" /></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button></div></section>`;
+const authPhone = () => `<section class="screen with-action" style="padding-top:70px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 24px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#c99aa1;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>По 300 баллов каждому</h3><p class="subtle" style="margin:0">Код ${prototypeState.referralCode}. Награда разблокируется после доставки вашего первого заказа.</p></div>` : ""}<div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" /></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button></div></section>`;
 
 const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><span></span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на ${prototypeState.loginPhone}</p><div class="otp-grid">${[0,1,2,3].map((index) => `<input class="otp-input" aria-label="Цифра ${index + 1}" inputmode="numeric" maxlength="1" pattern="[0-9]*" />`).join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Демо-код: <strong>0000</strong></p><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
 
@@ -812,7 +824,13 @@ const notifications = () => prototypeState.notificationFeed.length ? `<section c
 
 const notificationsEmpty = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Уведомления</h1></div></div><div class="state-panel"><div><div class="state-icon">◌</div><h2>Пока тихо</h2><p class="subtle">Здесь появятся статусы заказов, начисления баллов и важные новости.</p></div></div>${bottomNav("profile")}</section>`;
 
-const referral = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Приглашайте друзей</p><span></span></div><h1 style="font-size:36px;max-width:310px">По 300 баллов каждому</h1><p class="subtle" style="margin:14px 0 24px">Друг получит награду после первого доставленного заказа — и вам начислим столько же.</p><div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">Ваш код</p><div class="balance" style="letter-spacing:.08em">ARTUR7X</div><button class="chip" data-action="share" style="background:#fff;color:var(--ink);border:0;margin-top:12px">Скопировать ссылку</button></div><div class="section-head"><h2>Статистика</h2></div><div class="card"><div class="row between"><span>Перешли по ссылке</span><strong>4</strong></div><div class="row between" style="margin-top:16px"><span>Получили награду</span><strong>2</strong></div><div class="row between" style="margin-top:16px"><span>Начислено</span><strong class="plus">+600 P</strong></div></div><p class="subtle" style="margin-top:18px">Нельзя приглашать себя или использовать одну установку повторно.</p></section>`;
+const referral = () => { const rewarded = prototypeState.referralInvites.filter((item) => item.stage === "rewarded").length; const registered = prototypeState.referralInvites.filter((item) => ["registered","ordered","rewarded"].includes(item.stage)).length; return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><p class="eyebrow">Приглашайте друзей</p><button class="icon-btn" data-screen="referral-rules" aria-label="Правила приглашений">?</button></div><h1 style="font-size:36px;max-width:310px">По 300 баллов каждому</h1><p class="subtle" style="margin:14px 0 24px">Награда начисляется обоим после первого доставленного заказа друга.</p><div class="loyalty-hero"><p class="eyebrow" style="color:#d9b46a">Ваш код</p><div class="balance" style="letter-spacing:.08em">ARTUR7X</div><div class="row" style="margin-top:12px"><button class="chip" data-action="share" style="background:#fff;color:var(--ink);border:0">Скопировать ссылку</button><button class="chip" data-action="start-referral-demo" style="color:#fff;border-color:#77685d">Экран друга</button></div></div><div class="section-head"><h2>Воронка</h2></div><div class="card"><div class="row between"><span>Перешли по ссылке</span><strong>${prototypeState.referralInvites.length}</strong></div><div class="row between" style="margin-top:16px"><span>Зарегистрировались</span><strong>${registered}</strong></div><div class="row between" style="margin-top:16px"><span>Получили награду</span><strong>${rewarded}</strong></div><div class="row between" style="margin-top:16px"><span>Начислено вам</span><strong class="plus">+${rewarded * 300} P</strong></div></div><div class="section-head"><h2>Приглашения</h2></div>${prototypeState.referralInvites.map((invite) => `<div class="card" style="margin-bottom:10px"><div class="row between"><div><h3>${invite.name}</h3><p class="subtle" style="margin:0">${invite.label} · ${invite.date}</p></div><span class="status ${invite.stage === "rewarded" ? "" : "cancelled"}">${invite.stage === "rewarded" ? "+300 P" : invite.stage === "ordered" ? "Заказ" : "Ожидание"}</span></div></div>`).join("")}<p class="subtle" style="margin-top:18px">Статусы обновляются после подтверждения событий сервером.</p></section>`; };
+
+const referralLanding = () => `<section class="screen with-action"><div class="state-panel" style="min-height:620px;padding:20px"><div><div class="state-icon" style="width:94px;height:94px;font:44px Georgia,serif;background:#24201d;color:#d9b46a">P</div><p class="eyebrow">Подарок от Артура</p><h1 style="font-size:40px">300 баллов на знакомство</h1><p class="subtle" style="font-size:14px;margin:16px auto 24px;max-width:310px">Зарегистрируйтесь по приглашению и получите награду после доставки первого заказа. Артуру начислим столько же.</p><div class="card" style="text-align:left"><div class="row"><span class="step-number">1</span><span>Войдите по номеру телефона</span></div><div class="row" style="margin-top:14px"><span class="step-number">2</span><span>Оформите первый заказ</span></div><div class="row" style="margin-top:14px"><span class="step-number">3</span><span>Получите по 300 баллов</span></div></div></div></div><div class="fixed-action"><button class="primary rose" data-action="accept-referral">Принять приглашение</button></div></section>`;
+
+const referralRules = () => `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Программа друзей</p><h1>Условия приглашений</h1></div><span></span></div>${[["Кто может пригласить","Пользователь с подтверждённым номером телефона и хотя бы одним доставленным заказом."],["Когда начисляем","После доставки первого оплаченного заказа нового пользователя."],["Защита от дублей","Один номер, устройство и способ оплаты не могут участвовать повторно."],["Отмена и возврат","Если первый заказ отменён или возвращён, награда не начисляется или аннулируется."],["Срок действия","Начисленные баллы действуют 180 дней по общим правилам клуба."]].map(([title,body]) => `<div class="card" style="margin-bottom:10px"><h3>${title}</h3><p class="subtle" style="margin:0">${body}</p></div>`).join("")}<p class="subtle" style="margin-top:16px">В MVP проверка показана как серверное событие. Финальные лимиты утверждаются перед запуском.</p></section>`;
+
+const referralSuccess = () => `<section class="screen"><div class="state-panel" style="min-height:690px"><div><div class="state-icon" style="width:92px;height:92px;font-size:34px;background:#fff1cf;color:#9a742d">+P</div><p class="eyebrow">Первый заказ доставлен</p><h1 style="font-size:40px">По 300 баллов каждому</h1><p class="subtle" style="margin:16px auto 24px;max-width:300px">Вам баллы уже начислены. Пригласивший друг получил push и такую же награду.</p><div class="card" style="text-align:left"><div class="row between"><span>Ваш баланс</span><strong class="plus">+300 P</strong></div><div class="row between" style="margin-top:14px"><span>Награда другу</span><strong class="plus">+300 P</strong></div></div><button class="primary rose" data-screen="loyalty" style="margin-top:18px">Посмотреть баланс</button><button class="chip" data-screen="catalog" style="margin-top:12px">Вернуться в каталог</button></div></div></section>`;
 
 const subscriptionBenefits = () => `<div class="card" style="background:#24201d;color:#fff;border:0"><div class="row"><span class="coin">P</span><div><h3>Двойные баллы</h3><p class="subtle" style="color:#cfc7bf;margin:0">10% после доставки каждого заказа</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">✓</span><div><h3>Бесплатная доставка</h3><p class="subtle" style="color:#cfc7bf;margin:0">Курьером или в пункт выдачи</p></div></div><div class="row" style="margin-top:18px"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">◇</span><div><h3>Закрытые предложения</h3><p class="subtle" style="color:#cfc7bf;margin:0">Ранний доступ и подарки клуба</p></div></div></div>`;
 
@@ -842,7 +860,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1222,6 +1240,7 @@ document.addEventListener("click", async (event) => {
     if (!nextStage || nextStage.id === prototypeState.orderStatus) return;
     prototypeState.orderStatus = nextStage.id;
     let notificationBody = nextStage.body;
+    let referralUnlocked = false;
     if (nextStage.id === "delivered" && !prototypeState.orderRewarded) {
       const earnedPoints = prototypeState.claimedOfferIds.includes("double-points") || prototypeState.subscription ? 398 : 199;
       prototypeState.points += earnedPoints;
@@ -1229,10 +1248,22 @@ document.addEventListener("click", async (event) => {
       addLoyaltyOperation({ title: "Заказ SIM-00001 доставлен", points: earnedPoints });
       notificationBody = `Заказ получен · начислено ${earnedPoints} баллов`;
     }
+    if (nextStage.id === "delivered" && prototypeState.referralRewardPending && prototypeState.referralFriendRegistered && !prototypeState.referralRewardClaimed) {
+      prototypeState.points += 300;
+      prototypeState.referralRewardPending = false;
+      prototypeState.referralRewardClaimed = true;
+      prototypeState.referralFriendStage = "rewarded";
+      prototypeState.referralDemoActive = false;
+      addLoyaltyOperation({ title: "Подарок по приглашению", points: 300 });
+      addNotification({ type: "points", title: "По 300 баллов вам и другу", body: "Первый заказ доставлен · обе награды начислены", screen: "loyalty" });
+      track("referral_first_order_reward", { code: prototypeState.referralCode, friend_points: 300, inviter_points: 300, order: "SIM-00001" });
+      track("referral_reward", { code: prototypeState.referralCode, points: 300, trigger: "first_order_delivered" });
+      referralUnlocked = true;
+    }
     addNotification({ type: nextStage.id === "delivered" ? "points" : "order", title: nextStage.title, body: notificationBody, screen: nextStage.id === "delivered" ? "loyalty" : "order" });
     track("order_status_changed", { order: "SIM-00001", status: nextStage.id });
-    render("order", { remember: false });
-    toast(prototypeState.pushOrders ? `Push: ${nextStage.title}` : `Статус обновлён: ${nextStage.label}`);
+    render(referralUnlocked ? "referral-success" : "order", { remember: false });
+    toast(referralUnlocked ? "Вам и другу начислено по 300 баллов" : prototypeState.pushOrders ? `Push: ${nextStage.title}` : `Статус обновлён: ${nextStage.label}`);
     return;
   }
   if (action === "cancel-reason") {
@@ -1319,12 +1350,10 @@ document.addEventListener("click", async (event) => {
     prototypeState.profile = { ...prototypeState.profile, phone: prototypeState.loginPhone };
     let referralMessage = "";
     if (prototypeState.referralRewardPending && !prototypeState.referralRewardClaimed) {
-      prototypeState.points += 300;
-      addLoyaltyOperation({ title: "Подарок по приглашению", points: 300 });
-      prototypeState.referralRewardPending = false;
-      prototypeState.referralRewardClaimed = true;
-      track("referral_reward", { code: prototypeState.referralCode, points: 300 });
-      referralMessage = " · +300 баллов по приглашению";
+      prototypeState.referralFriendRegistered = true;
+      prototypeState.referralFriendStage = "registered";
+      track("referral_registered", { code: prototypeState.referralCode });
+      referralMessage = " · подарок закреплён до первой доставки";
     }
     render("catalog");
     toast(`Вы вошли в профиль${referralMessage}`);
@@ -1337,8 +1366,37 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "share") {
-    try { await navigator.clipboard.writeText("https://achukhliebov.github.io/pdparizz-mobile-demo/?ref=ARTUR7X&screen=auth-phone"); } catch {}
+    try { await navigator.clipboard.writeText("https://achukhliebov.github.io/pdparizz-mobile-demo/?ref=ARTUR7X&screen=referral-landing"); } catch {}
+    track("referral_link_copied", { code: "ARTUR7X" });
     toast("Реферальная ссылка скопирована");
+    return;
+  }
+  if (action === "start-referral-demo") {
+    prototypeState.referralCode = "ARTUR7X";
+    prototypeState.referralRewardPending = true;
+    prototypeState.referralRewardClaimed = false;
+    prototypeState.referralFriendRegistered = false;
+    prototypeState.referralFriendStage = "clicked";
+    prototypeState.referralDemoActive = true;
+    prototypeState.isAuthenticated = false;
+    render("referral-landing");
+    return;
+  }
+  if (action === "accept-referral") {
+    prototypeState.referralRewardPending = true;
+    prototypeState.referralFriendStage = "clicked";
+    render("auth-phone");
+    return;
+  }
+  if (action === "referral-demo-order") {
+    prototypeState.orderStatus = "shipping";
+    prototypeState.orderCancelled = false;
+    prototypeState.orderRewarded = false;
+    prototypeState.lastOrder = [{ id: "hayati", qty: 1, volume: 15 }];
+    prototypeState.lastOrderTotal = 44900;
+    prototypeState.lastOrderPointsUsed = 0;
+    render("order");
+    toast("Демо: первый заказ уже в пути");
     return;
   }
   if (action === "tariff") {
