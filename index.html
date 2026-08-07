@@ -113,6 +113,11 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 }
 .search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
 .search input::placeholder { color: var(--muted); }
+.catalog-tools { display: flex; gap: 10px; align-items: center; }
+.catalog-tools .search { flex: 1; width: auto; }
+.filter-option { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 14px 0; text-align: left; }
+.filter-check { width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 8px; display: grid; place-items: center; }
+.filter-option.active .filter-check { color: #fff; background: var(--rose); border-color: var(--rose); }
 .search-results-meta { margin: 18px 0 14px; }
 .search-empty { padding: 44px 22px; text-align: center; }
 .chips { display: flex; gap: 8px; margin: 14px 0 20px; overflow: hidden; }
@@ -392,7 +397,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
 const scenarios = [
   ["demo-hub", "Демо-центр"], ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
-  ["catalog", "Каталог"], ["catalog-search", "Поиск"], ["product", "Карточка"], ["cart", "Корзина"],
+  ["catalog", "Каталог"], ["catalog-search", "Поиск"], ["catalog-filters", "Фильтры"], ["catalog-results", "Результаты фильтров"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
   ["checkout", "Оформление"], ["pickup", "Пункты выдачи"], ["order-success", "Заказ оформлен"], ["orders", "Заказы"], ["order", "Заказ"], ["offers", "Предложения"],
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
@@ -405,7 +410,7 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.29";
+const APP_VERSION = "MVP 0.30";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
@@ -505,6 +510,8 @@ const defaultState = {
   catalogFilter: "Все",
   catalogQuery: "",
   recentSearches: ["ваниль", "цитрус", "мускус"],
+  catalogFilterNotes: [],
+  catalogFavoritesOnly: false,
   profile: { name: "Артур", phone: "+7 999 123-45-67", email: "artur@example.test" },
   addresses: [
     { id: "home", label: "Дом", line: "Москва, ул. Примерная, 12, кв. 34", details: "Домофон 34" },
@@ -546,6 +553,7 @@ if (!Array.isArray(prototypeState.supportMessages)) prototypeState.supportMessag
 if (!Array.isArray(prototypeState.loyaltyHistory)) prototypeState.loyaltyHistory = [...defaultState.loyaltyHistory];
 if (!Array.isArray(prototypeState.referralInvites)) prototypeState.referralInvites = [...defaultState.referralInvites];
 if (!Array.isArray(prototypeState.recentSearches)) prototypeState.recentSearches = [...defaultState.recentSearches];
+if (!Array.isArray(prototypeState.catalogFilterNotes)) prototypeState.catalogFilterNotes = [];
 if (!prototypeState.attribution || typeof prototypeState.attribution !== "object") prototypeState.attribution = { ...defaultState.attribution };
 if (params.get("welcome") === "1") {
   screen = "onboarding";
@@ -789,7 +797,7 @@ const quizResult = () => { const recommended = prototypeState.quizResultIds.map(
 
 const catalog = () => `<section class="screen">
   <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇${cartItemCount() ? `<small>${cartItemCount()}</small>` : ""}</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌${unreadNotifications() ? `<small>${unreadNotifications()}</small>` : ""}</button></div></div>
-  <button class="search" data-screen="catalog-search" aria-label="Открыть поиск">⌕ <span>Поиск по ароматам и нотам</span></button>
+  <div class="catalog-tools"><button class="search" data-screen="catalog-search" aria-label="Открыть поиск">⌕ <span>Поиск по ароматам и нотам</span></button><button class="icon-btn" data-screen="catalog-filters" aria-label="Фильтры каталога">≡</button></div>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
   ${prototypeState.referralRewardPending && prototypeState.referralFriendRegistered ? `<button class="card" data-action="${prototypeState.referralDemoActive ? "referral-demo-order" : ""}" data-screen="${prototypeState.referralDemoActive ? "" : "product"}" data-product-id="hayati" style="width:100%;text-align:left;margin-bottom:14px;border-color:#d6b56d;background:#fffaf0"><div class="row between"><div><p class="eyebrow">Подарок закреплён</p><h3>По 300 баллов вам и другу</h3><p class="subtle" style="margin:0">Оформите и получите первый заказ</p></div><strong>›</strong></div></button>` : ""}
@@ -808,6 +816,20 @@ const catalogSearch = () => {
   const results = products.filter((item) => !query || `${item.name} ${item.notes.join(" ")} ${item.category} ${item.description}`.toLowerCase().includes(query));
   return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Каталог PdParizz</p><h1>Поиск ароматов</h1></div><span class="subtle">${query ? results.length : "Поиск"}</span></div><label class="search">⌕ <input id="catalog-search-input" aria-label="Поиск по ароматам и нотам" placeholder="Название, бренд или нота" value="${escapeHtml(prototypeState.catalogQuery)}" autocomplete="off" /><button data-action="clear-search" aria-label="Очистить поиск" style="border:0;background:transparent;color:var(--muted);font-size:18px">${query ? "×" : ""}</button></label>${!query ? `<div class="section-head"><h2>Популярные ноты</h2></div><div class="chips" style="flex-wrap:wrap;overflow:visible">${["ваниль","цитрус","мускус","жасмин","манго","кедр"].map((term) => `<button class="chip" data-action="quick-search" data-query="${term}">${term}</button>`).join("")}</div>${prototypeState.recentSearches.length ? `<div class="section-head"><h2>Недавние запросы</h2><button class="chip" data-action="clear-search-history">Очистить</button></div><div class="card">${prototypeState.recentSearches.map((term) => `<button data-action="quick-search" data-query="${escapeHtml(term)}" style="width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:12px 0;text-align:left"><span class="row between"><span>↗ ${escapeHtml(term)}</span><strong>›</strong></span></button>`).join("")}</div>` : ""}` : `<div class="row between search-results-meta"><strong data-search-count>${results.length} ${results.length === 1 ? "аромат" : "ароматов"}</strong><span class="subtle">по запросу «${escapeHtml(prototypeState.catalogQuery)}»</span></div>`}${query && results.length ? `<div class="product-grid" data-search-grid>${results.map(productCard).join("")}</div>` : ""}<div class="card search-empty" data-search-empty ${!query || results.length ? "hidden" : ""}><div class="state-icon">⌕</div><h2>Ничего не нашли</h2><p class="subtle">Проверьте название или попробуйте искать по ноте: ваниль, мускус, цитрус.</p><button class="primary rose" data-action="clear-search">Сбросить запрос</button></div><p class="subtle" style="margin-top:18px">Поиск работает по названию, категории и нотам аромата.</p></section>`;
 };
+
+const catalogFilteredProducts = () => products.filter((item) => {
+  const matchesCategory = prototypeState.catalogFilter === "Все" || item.category === prototypeState.catalogFilter;
+  const matchesNotes = !prototypeState.catalogFilterNotes.length || prototypeState.catalogFilterNotes.some((note) => item.notes.map((value) => value.toLowerCase()).includes(note.toLowerCase()));
+  const matchesFavorite = !prototypeState.catalogFavoritesOnly || isFavorite(item.id);
+  return matchesCategory && matchesNotes && matchesFavorite;
+});
+const catalogFilterCount = () => (prototypeState.catalogFilter === "Все" ? 0 : 1) + prototypeState.catalogFilterNotes.length + (prototypeState.catalogFavoritesOnly ? 1 : 0);
+const catalogFilters = () => {
+  const count = catalogFilteredProducts().length;
+  const notes = ["Ваниль","Мускус","Тубероза","Манго","Кедр","Мандарин"];
+  return `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Каталог PdParizz</p><h1>Фильтры</h1></div><button class="chip" data-action="reset-catalog-filters">Сбросить</button></div><div class="section-head"><h2>Для кого</h2></div><div class="chips" style="flex-wrap:wrap;overflow:visible">${["Все","Женский","Мужской","Унисекс"].map((value) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter-category" data-filter="${value}">${value}</button>`).join("")}</div><div class="section-head"><h2>Любимые ноты</h2><span class="subtle">Можно несколько</span></div><div class="card">${notes.map((note) => { const active = prototypeState.catalogFilterNotes.includes(note); return `<button class="filter-option ${active ? "active" : ""}" data-action="filter-note" data-note="${note}"><span class="row between"><span>${note}</span><span class="filter-check">${active ? "✓" : ""}</span></span></button>`; }).join("")}</div><div class="section-head"><h2>Моя коллекция</h2></div><button class="card" data-action="filter-favorites" style="width:100%;text-align:left"><span class="row between"><span><strong>Только избранное</strong><span class="subtle" style="display:block;margin-top:4px">Покажем сохранённые ароматы</span></span><span class="switch ${prototypeState.catalogFavoritesOnly ? "" : "off"}"><i></i></span></span></button><div class="fixed-action"><button class="primary rose" data-screen="catalog-results">Показать ${count} ${count === 1 ? "аромат" : "ароматов"}</button></div></section>`;
+};
+const catalogResults = () => { const items = catalogFilteredProducts(); const filters = catalogFilterCount(); return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Подходящие ароматы</p><h1>Результаты</h1></div><button class="chip" data-screen="catalog-filters">Фильтры${filters ? ` · ${filters}` : ""}</button></div><div class="row between" style="margin-bottom:18px"><strong>${items.length} ${items.length === 1 ? "аромат" : "ароматов"}</strong><button class="chip" data-action="reset-catalog-filters">Сбросить</button></div>${items.length ? `<div class="product-grid">${items.map(productCard).join("")}</div>` : `<div class="card search-empty"><div class="state-icon">◇</div><h2>Слишком точный выбор</h2><p class="subtle">Уберите одну из нот или сбросьте фильтры, чтобы увидеть больше ароматов.</p><button class="primary rose" data-action="reset-catalog-filters">Показать все</button></div>`}<p class="subtle" style="margin-top:18px">Фильтры сохраняются на этом устройстве до сброса.</p></section>`; };
 
 const product = () => { const item = selectedProduct(); const volume = Number(prototypeState.selectedVolume) || 15; const price = volumePrice(item, volume); const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1); const related = products.filter((productItem) => productItem.id !== item.id && productItem.category === item.category).slice(0, 2); return `<section class="screen with-action">
   <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
@@ -984,7 +1006,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, "catalog-filters": catalogFilters, "catalog-results": catalogResults, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1301,6 +1323,36 @@ document.addEventListener("click", async (event) => {
     saveState();
     render("catalog-search", { remember: false });
     toast("История поиска очищена");
+    return;
+  }
+  if (action === "filter-category") {
+    prototypeState.catalogFilter = actionTarget.dataset.filter || "Все";
+    saveState();
+    render("catalog-filters", { remember: false });
+    return;
+  }
+  if (action === "filter-note") {
+    const note = actionTarget.dataset.note;
+    prototypeState.catalogFilterNotes = prototypeState.catalogFilterNotes.includes(note)
+      ? prototypeState.catalogFilterNotes.filter((item) => item !== note)
+      : [...prototypeState.catalogFilterNotes, note];
+    saveState();
+    render("catalog-filters", { remember: false });
+    return;
+  }
+  if (action === "filter-favorites") {
+    prototypeState.catalogFavoritesOnly = !prototypeState.catalogFavoritesOnly;
+    saveState();
+    render("catalog-filters", { remember: false });
+    return;
+  }
+  if (action === "reset-catalog-filters") {
+    prototypeState.catalogFilter = "Все";
+    prototypeState.catalogFilterNotes = [];
+    prototypeState.catalogFavoritesOnly = false;
+    saveState();
+    render(screen === "catalog-results" ? "catalog-results" : "catalog-filters", { remember: false });
+    toast("Фильтры сброшены");
     return;
   }
   if (action === "points") {
