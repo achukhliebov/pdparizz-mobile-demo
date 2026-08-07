@@ -151,6 +151,8 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .bottle::before { content: ""; position: absolute; width: 28px; height: 15px; top: -15px; left: 16px; background: #2d2925; border-radius: 3px 3px 0 0; }
 .bottle::after { content: "PdP"; position: absolute; left: 12px; right: 12px; top: 36px; border-top: 1px solid #a99a88; border-bottom: 1px solid #a99a88; padding: 5px 0; text-align: center; font: 10px Georgia, serif; }
 .heart { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,.78); }
+.compare-toggle { position: absolute; top: 10px; left: 10px; min-width: 32px; height: 32px; padding: 0 9px; border: 0; border-radius: 999px; background: rgba(255,255,255,.86); font-size: 12px; font-weight: 800; }
+.compare-toggle.active { background: var(--ink); color: #fff; }
 .product-meta { padding: 10px 2px 0; }
 .product-meta h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .product-meta p { margin: 0; color: var(--muted); font-size: 11px; }
@@ -176,6 +178,14 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .share-preview { display: grid; grid-template-columns: 88px 1fr; gap: 14px; align-items: center; }
 .share-preview img { width: 88px; height: 110px; object-fit: contain; border-radius: 14px; background: #f1ece3; }
 .share-link { overflow-wrap: anywhere; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.compare-grid { display: grid; gap: 8px; align-items: stretch; }
+.compare-product { min-width: 0; padding: 10px; text-align: center; }
+.compare-product img { width: 100%; height: 112px; object-fit: contain; border-radius: 12px; background: #f1ece3; }
+.compare-product h3 { min-height: 36px; margin-top: 8px; font-size: 12px; line-height: 1.25; }
+.compare-row { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.compare-row:last-child { border-bottom: 0; }
+.compare-values { display: grid; gap: 8px; margin-top: 9px; }
+.compare-value { min-width: 0; font-size: 12px; line-height: 1.35; }
 .rating { color: var(--gold); font-size: 12px; }
 .notes { display: flex; gap: 8px; margin: 18px 0; }
 .note { flex: 1; padding: 12px 8px; text-align: center; border: 1px solid var(--line); border-radius: var(--radius-sm); }
@@ -401,7 +411,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
 const scenarios = [
   ["demo-hub", "Демо-центр"], ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
-  ["catalog", "Каталог"], ["catalog-search", "Поиск"], ["catalog-filters", "Фильтры"], ["catalog-results", "Результаты фильтров"], ["product", "Карточка"], ["product-share", "Поделиться товаром"], ["cart", "Корзина"],
+  ["catalog", "Каталог"], ["catalog-search", "Поиск"], ["catalog-filters", "Фильтры"], ["catalog-results", "Результаты фильтров"], ["product", "Карточка"], ["product-share", "Поделиться товаром"], ["compare", "Сравнение"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
   ["checkout", "Оформление"], ["pickup", "Пункты выдачи"], ["order-success", "Заказ оформлен"], ["orders", "Заказы"], ["order", "Заказ"], ["offers", "Предложения"],
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
@@ -414,7 +424,7 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.32";
+const APP_VERSION = "MVP 0.33";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
@@ -511,6 +521,7 @@ const defaultState = {
   productQuantity: 1,
   cartVolumes: {},
   selectedProductId: "hayati",
+  compareProductIds: ["mango-skin", "hayati"],
   catalogFilter: "Все",
   catalogQuery: "",
   recentSearches: ["ваниль", "цитрус", "мускус"],
@@ -562,6 +573,8 @@ if (!Array.isArray(prototypeState.recentSearches)) prototypeState.recentSearches
 if (!Array.isArray(prototypeState.catalogFilterNotes)) prototypeState.catalogFilterNotes = [];
 if (!Array.isArray(prototypeState.priceWatchProductIds)) prototypeState.priceWatchProductIds = [];
 if (!Array.isArray(prototypeState.priceDropProductIds)) prototypeState.priceDropProductIds = [];
+if (!Array.isArray(prototypeState.compareProductIds)) prototypeState.compareProductIds = [...defaultState.compareProductIds];
+prototypeState.compareProductIds = [...new Set(prototypeState.compareProductIds)].filter((id) => products.some((item) => item.id === id)).slice(0, 3);
 if (!prototypeState.attribution || typeof prototypeState.attribution !== "object") prototypeState.attribution = { ...defaultState.attribution };
 if (params.get("welcome") === "1") {
   screen = "onboarding";
@@ -626,6 +639,7 @@ const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty
 const cartItemCount = () => cartEntries().reduce((sum, entry) => sum + entry.qty, 0);
 const cartGoodsMinor = () => cartEntries().reduce((sum, { unitPrice, qty }) => sum + unitPrice * qty, 0);
 const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
+const isCompared = (id) => prototypeState.compareProductIds.includes(id);
 const selectedAddress = () => prototypeState.addresses.find((item) => item.id === prototypeState.selectedAddressId) || prototypeState.addresses[0];
 const pickupPoints = [
   { id: "cdek-tverskaya", name: "СДЭК · Тверская", address: "ул. Тверская, 12", distance: "450 м", hours: "10:00–21:00" },
@@ -713,7 +727,7 @@ const eventLabels = {
   push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления",
   order_cancelled: "Отменён заказ", support_message_sent: "Сообщение в поддержку",
   cart_recovered: "Восстановлена корзина", cart_recovery_dismissed: "Скрыто напоминание корзины",
-  payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты", demo_flow_started: "Запущен демо-сценарий", demo_link_copied: "Скопирована ссылка на демо"
+  payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты", demo_flow_started: "Запущен демо-сценарий", demo_link_copied: "Скопирована ссылка на демо", compare_toggle: "Изменено сравнение", compare_completed: "Завершено сравнение"
 };
 const track = (name, data = {}) => {
   const attributionContext = prototypeState.attribution || defaultState.attribution;
@@ -784,7 +798,7 @@ const bottomNav = (active) => `<nav class="bottom-nav">
 </nav>`;
 
 const productCard = (item) => `<article class="product-card" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()} ${item.notes.join(" ").toLowerCase()}" data-product-category="${item.category}">
-  <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
+  <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="compare-toggle ${isCompared(item.id) ? "active" : ""}" data-action="compare-toggle" data-product-id="${item.id}" aria-label="${isCompared(item.id) ? "Убрать из сравнения" : "Добавить к сравнению"}">${isCompared(item.id) ? "✓ ⇄" : "⇄"}</button><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
   <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><div class="price">${rub(item.price)}</div></div>
 </article>`;
 
@@ -815,6 +829,7 @@ const catalog = () => `<section class="screen">
   <button class="card" data-screen="offers" style="width:100%;text-align:left;margin-bottom:12px;border-color:#d9b6bb;background:#fff7f8"><div class="row between"><div><p class="eyebrow">Только для вас</p><h3>Скидка 15% и бесплатная доставка</h3><p class="subtle" style="margin:0">Активируйте предложения перед заказом</p></div><strong>›</strong></div></button>
   <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#d9b46a">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfc7bf;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
   <div class="section-head"><h2>Для вас, ${prototypeState.profile.name}</h2><span>По вашим интересам</span></div><div class="product-grid">${personalizedProducts().map(productCard).join("")}</div>
+  ${prototypeState.compareProductIds.length ? `<button class="card" data-screen="compare" style="width:100%;text-align:left;margin-top:18px;border-color:#d6b56d;background:#fffaf0"><span class="row between"><span><p class="eyebrow">Выбор сохранён</p><strong>Сравнить ${prototypeState.compareProductIds.length} ${prototypeState.compareProductIds.length === 1 ? "аромат" : "аромата"}</strong></span><strong>⇄ ›</strong></span></button>` : ""}
   ${prototypeState.recentlyViewedProductIds.length ? `<div class="section-head"><h2>Недавно смотрели</h2><span>${prototypeState.recentlyViewedProductIds.length}</span></div><div class="mini-product-row">${prototypeState.recentlyViewedProductIds.map(productById).map((item) => `<button class="mini-product" data-screen="product" data-product-id="${item.id}"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><h3>${item.name}</h3><strong>${rub(item.price)}</strong></button>`).join("")}</div>` : ""}
   <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
   <div class="product-grid">${products.map(productCard).join("")}</div>
@@ -845,7 +860,7 @@ const product = () => { const item = selectedProduct(); const volume = Number(pr
   <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="share-btn" data-screen="product-share" aria-label="Поделиться ароматом">↗</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
   <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between" style="align-items:flex-start"><h1>${item.name}</h1><strong>${rub(price)}</strong></div>
   <p class="subtle">Парфюмерная вода · ${volume} мл · <s>${rub(volumeOldPrice(item, volume))}</s></p><button class="rating" data-action="open-reviews" style="border:0;background:transparent;padding:0">★★★★★ <span class="subtle">4,9 · 127 отзывов ›</span></button>
-  <p class="stock-line">● ${item.id === "aldebaran" ? "Осталось 4 флакона" : "В наличии · отправим сегодня"}</p><button class="card" data-action="watch-product" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:18px;${isPriceWatched(item.id) ? "border-color:#c99aa1;background:#fff8f8" : ""}"><span class="row between"><span><strong>${isPriceWatched(item.id) ? "Отслеживаем цену" : "Сообщить о снижении цены"}</strong><span class="subtle" style="display:block;margin-top:4px">${isPriceWatched(item.id) ? "Уведомление появится в приложении" : "Сохраним аромат и вернём вас к покупке"}</span></span><span>${isPriceWatched(item.id) ? "✓" : "+"}</span></span></button>
+  <p class="stock-line">● ${item.id === "aldebaran" ? "Осталось 4 флакона" : "В наличии · отправим сегодня"}</p><button class="card" data-action="watch-product" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:10px;${isPriceWatched(item.id) ? "border-color:#c99aa1;background:#fff8f8" : ""}"><span class="row between"><span><strong>${isPriceWatched(item.id) ? "Отслеживаем цену" : "Сообщить о снижении цены"}</strong><span class="subtle" style="display:block;margin-top:4px">${isPriceWatched(item.id) ? "Уведомление появится в приложении" : "Сохраним аромат и вернём вас к покупке"}</span></span><span>${isPriceWatched(item.id) ? "✓" : "+"}</span></span></button><button class="card" data-action="compare-toggle" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:18px;${isCompared(item.id) ? "border-color:#d6b56d;background:#fffaf0" : ""}"><span class="row between"><span><strong>${isCompared(item.id) ? "Добавлен к сравнению" : "Сравнить с другим ароматом"}</strong><span class="subtle" style="display:block;margin-top:4px">${isCompared(item.id) ? `${prototypeState.compareProductIds.length} из 3 выбрано · нажмите, чтобы убрать` : "Цена, ноты и характер рядом"}</span></span><span>⇄</span></span></button>
   <h3>Выберите объём</h3><div class="volume-grid">${[15,30,50].map((value) => `<button class="volume-option ${volume === value ? "selected" : ""}" data-action="volume" data-volume="${value}"><strong>${value} мл</strong><small>${rub(volumePrice(item,value))}</small></button>`).join("")}</div>
   <div class="row between"><h3 style="margin:0">Количество</h3><div class="quantity" style="margin:0"><button data-action="product-decrease" aria-label="Уменьшить количество">−</button><strong>${quantity}</strong><button data-action="product-increase" aria-label="Увеличить количество">+</button></div></div>
   <div class="notes">${item.notes.map((note, index) => `<div class="note"><b>${note}</b><span>${["верхние ноты", "сердце", "база"][index]}</span></div>`).join("")}</div>
@@ -855,6 +870,8 @@ const product = () => { const item = selectedProduct(); const volume = Number(pr
 </section>`; };
 
 const productShare = () => { const item = selectedProduct(); const url = productShareUrl(item.id); return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Ссылка на аромат</p><h1>Поделиться</h1></div><span></span></div><div class="card share-preview"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><div><p class="eyebrow">PdParizz · ${item.category}</p><h2 style="font-size:21px;margin:4px 0 8px">${item.name}</h2><strong>${rub(item.price)} · 15 мл</strong></div></div><div class="section-head"><h2>Что увидит получатель</h2></div><div class="card"><div class="row" style="align-items:flex-start"><span class="step-number">1</span><div><strong>Сразу нужный аромат</strong><p class="subtle" style="margin:4px 0 0">Ссылка откроет эту карточку без поиска по каталогу.</p></div></div><div class="row" style="align-items:flex-start;margin-top:14px"><span class="step-number">2</span><div><strong>Источник перехода сохранится</strong><p class="subtle" style="margin:4px 0 0">В аналитике появится органический шаринг товара.</p></div></div></div><div class="section-head"><h2>Публичная ссылка</h2><span class="status">Готова</span></div><div class="card"><p class="share-link">${url}</p><button class="chip" data-action="copy-product-link" style="width:100%;margin-top:12px">Скопировать ссылку</button></div><button class="primary rose" data-action="share-product-native" style="margin-top:18px">Поделиться ароматом</button><button class="chip" data-screen="product" style="width:100%;margin-top:12px">Вернуться к товару</button><p class="subtle" style="text-align:center;margin-top:16px">На iPhone откроется стандартное меню отправки. В браузере ссылка скопируется.</p></section>`; };
+
+const compare = () => { const items = prototypeState.compareProductIds.map(productById); const columns = Math.max(1, items.length); const remaining = products.filter((item) => !isCompared(item.id)); const values = (mapper) => `<div class="compare-values" style="grid-template-columns:repeat(${columns},minmax(0,1fr))">${items.map((item) => `<div class="compare-value">${mapper(item)}</div>`).join("")}</div>`; return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Выбор без сомнений</p><h1>Сравнение</h1></div><span class="status">${items.length}/3</span></div>${items.length ? `<div class="compare-grid" style="grid-template-columns:repeat(${columns},minmax(0,1fr))">${items.map((item) => `<article class="card compare-product"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><h3>${item.name}</h3><strong>${rub(item.price)}</strong><button class="chip" data-action="compare-toggle" data-product-id="${item.id}" style="width:100%;margin-top:9px;padding:6px 7px">Убрать</button></article>`).join("")}</div><div class="section-head"><h2>Главные отличия</h2><span>15 мл</span></div><div class="card"><div class="compare-row"><strong>Для кого</strong>${values((item) => item.category)}</div><div class="compare-row"><strong>Ноты</strong>${values((item) => item.notes.join(" · "))}</div><div class="compare-row"><strong>Характер</strong>${values((item) => item.description)}</div><div class="compare-row"><strong>Цена</strong>${values((item) => `<strong>${rub(item.price)}</strong><br><s class="subtle">${rub(item.oldPrice)}</s>`)}</div></div>` : `<div class="card search-empty"><div class="state-icon">⇄</div><h2>Выберите ароматы</h2><p class="subtle">Добавьте два или три товара, чтобы увидеть отличия рядом.</p></div>`}<div class="section-head"><h2>${items.length < 3 ? "Добавить аромат" : "Выбрано максимум"}</h2><span>${items.length < 3 ? "До трёх" : "Уберите один"}</span></div>${items.length < 3 ? `<div class="chips" style="flex-wrap:wrap;overflow:visible">${remaining.slice(0, 6).map((item) => `<button class="chip" data-action="compare-toggle" data-product-id="${item.id}">+ ${item.name.split(" ").slice(-2).join(" ")}</button>`).join("")}</div>` : ""}<button class="primary rose" data-action="compare-best" style="margin-top:8px" ${items.length < 2 ? "disabled" : ""}>Выбрать подходящий</button><button class="chip" data-screen="catalog" style="width:100%;margin-top:12px">Вернуться в каталог</button><p class="subtle" style="text-align:center;margin-top:16px">Выбор сохраняется на этом устройстве.</p></section>`; };
 
 const reviews = () => { const item = selectedProduct(); const reviewsList = [["Марина","★★★★★","Очень стойкий и аккуратный аромат. Для сумки формат 15 мл идеален."],["Алексей","★★★★★","Похожее направление и удобный флакон. Доставка пришла быстро."],["Ольга","★★★★★","Сначала взяла пробный объём, теперь вернулась за 50 мл."],["Ирина","★★★★☆","Красивый шлейф, на коже раскрывается мягче через полчаса."]]; return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">${item.name}</p><h1>Отзывы</h1></div><span></span></div><div class="card"><div class="row" style="align-items:flex-start"><div><h1 style="font-size:52px">4,9</h1><p class="review-stars">★★★★★</p><p class="subtle">127 оценок</p></div><div style="flex:1">${[[5,86],[4,10],[3,3],[2,1],[1,0]].map(([stars,value]) => `<div class="review-bar"><span>${stars}</span><div class="review-track"><span style="width:${value}%"></span></div><small>${value}%</small></div>`).join("")}</div></div></div><div class="section-head"><h2>Покупатели говорят</h2><button class="chip">С фото</button></div>${reviewsList.map(([name,stars,body],index) => `<article class="card" style="margin-bottom:10px"><div class="row between"><strong>${name}</strong><span class="review-stars">${stars}</span></div><p class="subtle" style="margin:10px 0">${body}</p><div class="row between"><small class="subtle">Подтверждённая покупка · ${index + 2} августа</small><button class="chip" data-action="review-helpful">Полезно</button></div></article>`).join("")}</section>`; };
 
@@ -1020,7 +1037,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, "catalog-filters": catalogFilters, "catalog-results": catalogResults, product, "product-share": productShare, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, watchlist, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, "catalog-filters": catalogFilters, "catalog-results": catalogResults, product, "product-share": productShare, compare, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, watchlist, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1279,6 +1296,40 @@ document.addEventListener("click", async (event) => {
     const copied = await copyText(url);
     track("referral_share", { target: `product:${item.id}`, method: "copy" });
     toast(copied ? "Ссылка на аромат скопирована" : url);
+    return;
+  }
+  if (action === "compare-toggle") {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = actionTarget.dataset.productId || prototypeState.selectedProductId;
+    if (isCompared(id)) {
+      prototypeState.compareProductIds = prototypeState.compareProductIds.filter((itemId) => itemId !== id);
+      track("compare_toggle", { product: id, value: "off", count: prototypeState.compareProductIds.length });
+      saveState();
+      render(screen, { remember: false });
+      toast("Аромат убран из сравнения");
+      return;
+    }
+    if (prototypeState.compareProductIds.length >= 3) {
+      toast("Можно сравнить не больше трёх ароматов");
+      return;
+    }
+    prototypeState.compareProductIds = [...prototypeState.compareProductIds, id];
+    track("compare_toggle", { product: id, value: "on", count: prototypeState.compareProductIds.length });
+    saveState();
+    render(screen, { remember: false });
+    toast(prototypeState.compareProductIds.length > 1 ? "Аромат добавлен · сравнение готово" : "Добавьте ещё один аромат");
+    return;
+  }
+  if (action === "compare-best") {
+    if (prototypeState.compareProductIds.length < 2) { toast("Добавьте ещё один аромат"); return; }
+    const scored = prototypeState.compareProductIds.map((id, index) => ({ id, score: (isFavorite(id) ? 2 : 0) + (isPriceWatched(id) ? 2 : 0) - index * .01 })).sort((a, b) => b.score - a.score);
+    prototypeState.selectedProductId = scored[0].id;
+    recordRecentView(scored[0].id);
+    track("compare_completed", { products: prototypeState.compareProductIds.join(","), selected: scored[0].id });
+    saveState();
+    render("product");
+    toast(`Лучшее совпадение · ${selectedProduct().name}`);
     return;
   }
   if (action === "favorite") {
