@@ -109,10 +109,12 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 
 .search {
   height: 48px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
-  display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--muted); font-size: 14px;
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 0 14px; color: var(--muted); font-size: 14px; text-align: left;
 }
 .search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
 .search input::placeholder { color: var(--muted); }
+.search-results-meta { margin: 18px 0 14px; }
+.search-empty { padding: 44px 22px; text-align: center; }
 .chips { display: flex; gap: 8px; margin: 14px 0 20px; overflow: hidden; }
 .chip { white-space: nowrap; border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 8px 12px; font-size: 12px; }
 .chip.active { border-color: var(--ink); background: var(--ink); color: #fff; }
@@ -390,7 +392,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
 const scenarios = [
   ["demo-hub", "Демо-центр"], ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
-  ["catalog", "Каталог"], ["product", "Карточка"], ["cart", "Корзина"],
+  ["catalog", "Каталог"], ["catalog-search", "Поиск"], ["product", "Карточка"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
   ["checkout", "Оформление"], ["pickup", "Пункты выдачи"], ["order-success", "Заказ оформлен"], ["orders", "Заказы"], ["order", "Заказ"], ["offers", "Предложения"],
   ["payment-processing", "Оплата · обработка"], ["payment-error", "Ошибка оплаты"], ["order-delivered", "Доставлен"], ["order-cancel", "Отмена заказа"], ["support", "Поддержка"],
@@ -403,7 +405,7 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.28";
+const APP_VERSION = "MVP 0.29";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
@@ -501,6 +503,8 @@ const defaultState = {
   cartVolumes: {},
   selectedProductId: "hayati",
   catalogFilter: "Все",
+  catalogQuery: "",
+  recentSearches: ["ваниль", "цитрус", "мускус"],
   profile: { name: "Артур", phone: "+7 999 123-45-67", email: "artur@example.test" },
   addresses: [
     { id: "home", label: "Дом", line: "Москва, ул. Примерная, 12, кв. 34", details: "Домофон 34" },
@@ -541,6 +545,7 @@ if (!Array.isArray(prototypeState.notificationFeed)) prototypeState.notification
 if (!Array.isArray(prototypeState.supportMessages)) prototypeState.supportMessages = [...defaultState.supportMessages];
 if (!Array.isArray(prototypeState.loyaltyHistory)) prototypeState.loyaltyHistory = [...defaultState.loyaltyHistory];
 if (!Array.isArray(prototypeState.referralInvites)) prototypeState.referralInvites = [...defaultState.referralInvites];
+if (!Array.isArray(prototypeState.recentSearches)) prototypeState.recentSearches = [...defaultState.recentSearches];
 if (!prototypeState.attribution || typeof prototypeState.attribution !== "object") prototypeState.attribution = { ...defaultState.attribution };
 if (params.get("welcome") === "1") {
   screen = "onboarding";
@@ -753,6 +758,7 @@ const checkoutPointsToUse = () => {
 };
 
 const rub = (minor) => `${new Intl.NumberFormat("ru-RU").format(minor / 100)} ₽`;
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const bottle = '<span class="bottle" aria-hidden="true"></span>';
 const bottomNav = (active) => `<nav class="bottom-nav">
   ${[["catalog","⌂","Главная"],["orders","▤","Заказы"],["loyalty","◇","Баллы"],["profile","○","Профиль"]].map(([id, icon, label]) =>
@@ -783,7 +789,7 @@ const quizResult = () => { const recommended = prototypeState.quizResultIds.map(
 
 const catalog = () => `<section class="screen">
   <div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Найди свой аромат</h1></div><div class="row"><button class="icon-btn" data-screen="cart" aria-label="Корзина">◇${cartItemCount() ? `<small>${cartItemCount()}</small>` : ""}</button><button class="icon-btn" data-screen="notifications" aria-label="Уведомления">◌${unreadNotifications() ? `<small>${unreadNotifications()}</small>` : ""}</button></div></div>
-  <label class="search">⌕ <input id="catalog-search" aria-label="Поиск по ароматам и нотам" placeholder="Поиск по ароматам и нотам" /></label>
+  <button class="search" data-screen="catalog-search" aria-label="Открыть поиск">⌕ <span>Поиск по ароматам и нотам</span></button>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
   ${prototypeState.referralRewardPending && prototypeState.referralFriendRegistered ? `<button class="card" data-action="${prototypeState.referralDemoActive ? "referral-demo-order" : ""}" data-screen="${prototypeState.referralDemoActive ? "" : "product"}" data-product-id="hayati" style="width:100%;text-align:left;margin-bottom:14px;border-color:#d6b56d;background:#fffaf0"><div class="row between"><div><p class="eyebrow">Подарок закреплён</p><h3>По 300 баллов вам и другу</h3><p class="subtle" style="margin:0">Оформите и получите первый заказ</p></div><strong>›</strong></div></button>` : ""}
@@ -796,6 +802,12 @@ const catalog = () => `<section class="screen">
   <div class="product-grid">${products.map(productCard).join("")}</div>
   ${bottomNav("catalog")}
 </section>`;
+
+const catalogSearch = () => {
+  const query = prototypeState.catalogQuery.trim().toLowerCase();
+  const results = products.filter((item) => !query || `${item.name} ${item.notes.join(" ")} ${item.category} ${item.description}`.toLowerCase().includes(query));
+  return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Каталог PdParizz</p><h1>Поиск ароматов</h1></div><span class="subtle">${query ? results.length : "Поиск"}</span></div><label class="search">⌕ <input id="catalog-search-input" aria-label="Поиск по ароматам и нотам" placeholder="Название, бренд или нота" value="${escapeHtml(prototypeState.catalogQuery)}" autocomplete="off" /><button data-action="clear-search" aria-label="Очистить поиск" style="border:0;background:transparent;color:var(--muted);font-size:18px">${query ? "×" : ""}</button></label>${!query ? `<div class="section-head"><h2>Популярные ноты</h2></div><div class="chips" style="flex-wrap:wrap;overflow:visible">${["ваниль","цитрус","мускус","жасмин","манго","кедр"].map((term) => `<button class="chip" data-action="quick-search" data-query="${term}">${term}</button>`).join("")}</div>${prototypeState.recentSearches.length ? `<div class="section-head"><h2>Недавние запросы</h2><button class="chip" data-action="clear-search-history">Очистить</button></div><div class="card">${prototypeState.recentSearches.map((term) => `<button data-action="quick-search" data-query="${escapeHtml(term)}" style="width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:12px 0;text-align:left"><span class="row between"><span>↗ ${escapeHtml(term)}</span><strong>›</strong></span></button>`).join("")}</div>` : ""}` : `<div class="row between search-results-meta"><strong data-search-count>${results.length} ${results.length === 1 ? "аромат" : "ароматов"}</strong><span class="subtle">по запросу «${escapeHtml(prototypeState.catalogQuery)}»</span></div>`}${query && results.length ? `<div class="product-grid" data-search-grid>${results.map(productCard).join("")}</div>` : ""}<div class="card search-empty" data-search-empty ${!query || results.length ? "hidden" : ""}><div class="state-icon">⌕</div><h2>Ничего не нашли</h2><p class="subtle">Проверьте название или попробуйте искать по ноте: ваниль, мускус, цитрус.</p><button class="primary rose" data-action="clear-search">Сбросить запрос</button></div><p class="subtle" style="margin-top:18px">Поиск работает по названию, категории и нотам аромата.</p></section>`;
+};
 
 const product = () => { const item = selectedProduct(); const volume = Number(prototypeState.selectedVolume) || 15; const price = volumePrice(item, volume); const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1); const related = products.filter((productItem) => productItem.id !== item.id && productItem.category === item.category).slice(0, 2); return `<section class="screen with-action">
   <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
@@ -972,7 +984,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, product, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
@@ -1085,12 +1097,19 @@ function resolvePaymentAttempt(forceSuccess = false) {
 }
 
 function applyCatalogFilters() {
-  const query = (document.querySelector("#catalog-search")?.value || "").trim().toLowerCase();
   document.querySelectorAll(".product-card").forEach((card) => {
-    const matchesText = !query || card.dataset.productName.includes(query);
     const matchesCategory = prototypeState.catalogFilter === "Все" || card.dataset.productCategory === prototypeState.catalogFilter;
-    card.hidden = !(matchesText && matchesCategory);
+    card.hidden = !matchesCategory;
   });
+}
+
+function rememberCatalogSearch() {
+  const query = prototypeState.catalogQuery.trim().toLowerCase();
+  if (query.length < 2) return;
+  prototypeState.recentSearches = [query, ...prototypeState.recentSearches.filter((item) => item !== query)].slice(0, 5);
+  const results = products.filter((item) => `${item.name} ${item.notes.join(" ")} ${item.category} ${item.description}`.toLowerCase().includes(query)).length;
+  track("search", { queryLength: query.length, results });
+  saveState();
 }
 
 document.addEventListener("click", async (event) => {
@@ -1262,6 +1281,26 @@ document.addEventListener("click", async (event) => {
     applyCatalogFilters();
     saveState();
     toast(`Фильтр «${actionTarget.textContent.trim()}» применён`);
+    return;
+  }
+  if (action === "quick-search") {
+    prototypeState.catalogQuery = actionTarget.dataset.query || "";
+    rememberCatalogSearch();
+    render("catalog-search", { remember: false });
+    return;
+  }
+  if (action === "clear-search") {
+    prototypeState.catalogQuery = "";
+    saveState();
+    render("catalog-search", { remember: false });
+    document.querySelector("#catalog-search-input")?.focus();
+    return;
+  }
+  if (action === "clear-search-history") {
+    prototypeState.recentSearches = [];
+    saveState();
+    render("catalog-search", { remember: false });
+    toast("История поиска очищена");
     return;
   }
   if (action === "points") {
@@ -1786,6 +1825,7 @@ document.addEventListener("click", async (event) => {
   if (screenTarget?.dataset.screen) {
     event.preventDefault();
     if (screenTarget.dataset.productId) {
+      if (screen === "catalog-search") rememberCatalogSearch();
       prototypeState.selectedProductId = screenTarget.dataset.productId;
       recordRecentView(screenTarget.dataset.productId);
       prototypeState.selectedVolume = Number(prototypeState.cartVolumes[screenTarget.dataset.productId]) || 15;
@@ -1807,11 +1847,28 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.id === "catalog-search") { applyCatalogFilters(); return; }
+  if (event.target.id === "catalog-search-input") {
+    prototypeState.catalogQuery = event.target.value.slice(0, 80);
+    saveState();
+    render("catalog-search", { remember: false, trackView: false });
+    const input = document.querySelector("#catalog-search-input");
+    input?.focus();
+    input?.setSelectionRange(input.value.length, input.value.length);
+    return;
+  }
   if (event.target.id === "courier-comment") { prototypeState.courierComment = event.target.value; saveState(); return; }
   if (event.target.classList.contains("otp-input")) {
     event.target.value = event.target.value.replace(/\D/g, "").slice(-1);
     if (event.target.value) event.target.nextElementSibling?.focus();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.target.id === "catalog-search-input" && event.key === "Enter") {
+    event.preventDefault();
+    rememberCatalogSearch();
+    event.target.blur();
+    toast("Поиск сохранён в истории");
   }
 });
 
