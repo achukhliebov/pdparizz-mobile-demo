@@ -403,7 +403,7 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.16";
+const APP_VERSION = "MVP 0.16.1";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
@@ -1007,6 +1007,24 @@ function toast(message) {
   element.textContent = message;
   document.querySelector(".phone").append(element);
   setTimeout(() => element.remove(), 1800);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.append(field);
+  field.select();
+  field.setSelectionRange(0, field.value.length);
+  const copied = document.execCommand("copy");
+  field.remove();
+  return copied;
 }
 
 function completePayment() {
@@ -1705,10 +1723,10 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "copy-demo-link") {
-    try { await navigator.clipboard.writeText(PUBLIC_DEMO_URL); } catch {}
+    const copied = await copyText(PUBLIC_DEMO_URL);
     track("demo_link_copied", { version: APP_VERSION, url: PUBLIC_DEMO_URL });
     saveState();
-    toast("Постоянная ссылка скопирована");
+    toast(copied ? "Постоянная ссылка скопирована" : PUBLIC_DEMO_URL);
     return;
   }
   if (action === "reload-app") {
