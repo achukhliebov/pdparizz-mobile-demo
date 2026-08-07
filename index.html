@@ -403,7 +403,7 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.16.1";
+const APP_VERSION = "MVP 0.17";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
@@ -992,6 +992,9 @@ function render(next = screen, { remember = true, trackView = true } = {}) {
     const versionLabel = app.querySelector(".topline > .subtle");
     if (versionLabel) versionLabel.textContent = APP_VERSION;
     app.querySelector(".screen > p:last-child")?.insertAdjacentHTML("beforebegin", `<button class="primary rose" data-action="copy-demo-link" style="margin-top:12px">Скопировать постоянную ссылку</button><button class="chip" data-screen="install" style="width:100%;margin-top:10px">Установить на iPhone</button>`);
+  }
+  if (screen === "data-sync") {
+    app.querySelector(".screen > p:last-child")?.insertAdjacentHTML("beforebegin", `<div class="section-head"><h2>Внешние адаптеры</h2><span class="subtle">Контракт 0.2.0</span></div><div class="card">${[["Битрикс24","Каталог, цены, остатки и CRM"],["КИТ","Заказы и клиентский контур"],["Оплата","Платёж, статус и возврат"],["Доставка","Расчёт, отправление и трекинг"]].map(([name,body]) => `<div class="row between" style="padding:9px 0;border-bottom:1px solid var(--line)"><div><strong>${name}</strong><p class="subtle" style="margin:3px 0 0">${body}</p></div><span class="status cancelled">Не настроен</span></div>`).join("")}</div>`);
   }
   saveState();
 }
