@@ -1,4 +1,4 @@
-const CACHE_NAME = "pdparizz-shell-v18";
+const CACHE_NAME = "pdparizz-shell-v19";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
