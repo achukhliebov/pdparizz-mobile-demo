@@ -352,6 +352,12 @@ h3 { margin-bottom: 5px; font-size: 15px; }
   position: absolute; inset: 34px 0 auto; z-index: 40; padding: 10px 16px;
   background: #3d3833; color: #fff; text-align: center; font-size: 12px; font-weight: 700;
 }
+.update-banner {
+  position: absolute; left: 14px; right: 14px; top: 42px; z-index: 45; padding: 12px 14px;
+  border-radius: 14px; background: #24201d; color: #fff; box-shadow: 0 8px 30px rgba(0,0,0,.24);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px;
+}
+.update-banner button { border: 0; border-radius: 99px; padding: 8px 12px; background: #fff; color: var(--ink); font-weight: 800; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 @media (max-width: 760px) {
@@ -397,6 +403,8 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
+const APP_VERSION = "MVP 0.16";
+const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
 
@@ -682,7 +690,7 @@ const eventLabels = {
   push_opened: "Открыто уведомление", notifications_read: "Прочитаны уведомления",
   order_cancelled: "Отменён заказ", support_message_sent: "Сообщение в поддержку",
   cart_recovered: "Восстановлена корзина", cart_recovery_dismissed: "Скрыто напоминание корзины",
-  payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты", demo_flow_started: "Запущен демо-сценарий"
+  payment_started: "Начата оплата", payment_failed: "Ошибка оплаты", payment_retried: "Повтор оплаты", demo_flow_started: "Запущен демо-сценарий", demo_link_copied: "Скопирована ссылка на демо"
 };
 const track = (name, data = {}) => {
   const attributionContext = prototypeState.attribution || defaultState.attribution;
@@ -980,6 +988,11 @@ function render(next = screen, { remember = true, trackView = true } = {}) {
   auditNav.innerHTML = scenarios.map(([id, label]) => `<a class="${id === screen ? "active" : ""}" href="?screen=${id}" data-screen="${id}">${label}</a>`).join("");
   if (screen === "catalog") applyCatalogFilters();
   if (screen === "analytics") app.querySelector(".screen > p:last-child")?.insertAdjacentHTML("beforebegin", `<button class="chip" data-screen="data-sync" style="width:100%;margin-top:14px">Открыть контур данных</button>`);
+  if (screen === "demo-hub") {
+    const versionLabel = app.querySelector(".topline > .subtle");
+    if (versionLabel) versionLabel.textContent = APP_VERSION;
+    app.querySelector(".screen > p:last-child")?.insertAdjacentHTML("beforebegin", `<button class="primary rose" data-action="copy-demo-link" style="margin-top:12px">Скопировать постоянную ссылку</button><button class="chip" data-screen="install" style="width:100%;margin-top:10px">Установить на iPhone</button>`);
+  }
   saveState();
 }
 
@@ -1691,6 +1704,17 @@ document.addEventListener("click", async (event) => {
     toast("MVP возвращён в исходное состояние");
     return;
   }
+  if (action === "copy-demo-link") {
+    try { await navigator.clipboard.writeText(PUBLIC_DEMO_URL); } catch {}
+    track("demo_link_copied", { version: APP_VERSION, url: PUBLIC_DEMO_URL });
+    saveState();
+    toast("Постоянная ссылка скопирована");
+    return;
+  }
+  if (action === "reload-app") {
+    location.reload();
+    return;
+  }
   if (action === "toggle-analytics-consent") {
     prototypeState.analyticsConsent = prototypeState.analyticsConsent === false;
     if (prototypeState.analyticsConsent === false) prototypeState.syncQueue = [];
@@ -1771,7 +1795,24 @@ window.addEventListener("appinstalled", () => {
 });
 window.addEventListener("offline", () => toast("Нет сети · включён офлайн-режим"));
 window.addEventListener("online", () => toast("Соединение восстановлено"));
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+const showUpdateBanner = () => {
+  if (document.querySelector(".update-banner")) return;
+  const banner = document.createElement("div");
+  banner.className = "update-banner";
+  banner.innerHTML = `<span>Доступна новая версия PdParizz</span><button data-action="reload-app">Обновить</button>`;
+  document.querySelector(".phone")?.append(banner);
+};
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").then((registration) => {
+    if (registration.waiting && navigator.serviceWorker.controller) showUpdateBanner();
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      worker?.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner();
+      });
+    });
+  }).catch(() => {});
+}
 if (deepLinkProduct) { recordRecentView(deepLinkProduct); track("product_view", { product: deepLinkProduct, source: "deep_link" }); }
 if (params.get("source") === "installed") track("screen_view", { screen: "installed_launch" });
 render(screen, { remember: false });
