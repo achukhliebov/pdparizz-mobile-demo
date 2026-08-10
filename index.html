@@ -138,6 +138,9 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .section-head span { color: var(--rose); font-size: 12px; }
 .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .product-card { min-width: 0; }
+.product-card.unavailable .product-art { filter: saturate(.45); opacity: .72; }
+.availability { margin-top: 5px !important; color: var(--success) !important; font-weight: 700; }
+.availability.unavailable { color: var(--muted) !important; }
 .product-art {
   aspect-ratio: 1 / 1.18; border-radius: var(--radius-md); position: relative; overflow: hidden;
   background: radial-gradient(circle at 70% 18%, #fff 0 4%, transparent 32%), linear-gradient(150deg, #e6d7c3, #b49b7c);
@@ -424,12 +427,13 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.33";
+const APP_VERSION = "MVP 0.34";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
+const CATALOG_API_URL = "https://pdparizz-bitrix24-gateway.pdparizz-mobile.workers.dev/api/catalog/products";
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
 
-const products = [
+const fallbackProducts = [
   { id: "hayati", name: "Attar collection Hayati", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/14319028/xrqd7xq4qpgvxtkpj6jgmtj8jbp9lmz2/x640", sourceUrl: "https://pdparizz.biz/products/attar-collection-hayati-7-101474", notes: ["Малина", "Сливки", "Ваниль"], description: "Сочный фруктово-гурманский аромат с малиной, сливками и мягкой ванильной базой." },
   { id: "paco-million", name: "Paco Rabanne 1 Million", price: 44900, oldPrice: 169000, category: "Мужской", image: "https://avatars.mds.yandex.net/get-yastore/15395726/7t6h45hkh94wddd68s5drwc5nx554dhh/x640", sourceUrl: "https://pdparizz.biz/products/paco-rabanne-1-million-2-101582", notes: ["Мандарин", "Корица", "Кожа"], description: "Яркий пряный аромат с цитрусовым стартом, корицей и тёплым кожаным шлейфом." },
   { id: "lacoste-blanc", name: "Lacoste Eau De L.12.12 Blanc", price: 44900, oldPrice: 169000, category: "Мужской", image: "https://avatars.mds.yandex.net/get-yastore/15395726/j6svf7lpxn9hjr8lrqlw2s7gzhtm45wg/x640", sourceUrl: "https://pdparizz.biz/products/lacoste-eau-de-l1212-blanc-2-101502", notes: ["Грейпфрут", "Тубероза", "Кедр"], description: "Чистый свежий аромат: цитрусовая прохлада, белые цветы и сухая древесная база." },
@@ -441,6 +445,58 @@ const products = [
   { id: "aldebaran", name: "Marc-Antoine Barrois Aldebaran", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/14319028/m65bkrwntcmbvrd74qmldv8wmscrzgpp/x640", sourceUrl: "https://pdparizz.biz/products/marc-antoine-barrois-aldebaran-2-101599", notes: ["Тубероза", "Мате", "Паприка"], description: "Необычный сияющий аромат, где белые цветы встречаются с зелёными и пряными оттенками." },
   { id: "mango-skin", name: "Vilhelm Parfumerie Mango skin", price: 44900, oldPrice: 169000, category: "Унисекс", image: "https://avatars.mds.yandex.net/get-yastore/15395726/zt9n5c72pj8twsbph9vjsggwxdcjxpqp/x640", sourceUrl: "https://pdparizz.biz/products/vilhelm-parfumerie-mango-skin-2-101420", notes: ["Манго", "Смородина", "Мускус"], description: "Спелое манго и чёрная смородина в сочной, яркой композиции с чистым мускусным шлейфом." }
 ];
+let products = [...fallbackProducts];
+let catalogConnection = "loading";
+let liveProductCount = 0;
+let catalogSyncedAt = null;
+
+const normalizedCatalogName = (value, fallback = "Аромат PdParizz") => {
+  const text = String(value ?? "").replace(/[&<>"'\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+  return text.slice(0, 180) || fallback;
+};
+const liveProductImage = (value) => {
+  try {
+    const url = new URL(String(value || ""), CATALOG_API_URL);
+    const apiOrigin = new URL(CATALOG_API_URL).origin;
+    return url.origin === apiOrigin && url.pathname.startsWith("/api/catalog/images/") ? url.href : "";
+  } catch { return ""; }
+};
+const catalogMetadata = (name) => fallbackProducts.find((item) => item.name.toLowerCase() === name.toLowerCase());
+async function loadLiveCatalog() {
+  const response = await fetch(CATALOG_API_URL, { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error("CATALOG_UNAVAILABLE");
+  const payload = await response.json();
+  const rows = Array.isArray(payload.products) ? payload.products : [];
+  const liveProducts = rows.map((row) => {
+    const name = normalizedCatalogName(row.name);
+    const metadata = catalogMetadata(name);
+    const amountMinor = Number(row.price?.amountMinor);
+    const externalId = String(row.externalId ?? "").replace(/[^0-9A-Za-z_-]/g, "").slice(0, 80);
+    const image = liveProductImage(row.imageUrl) || metadata?.image || "";
+    if (!externalId || !Number.isInteger(amountMinor) || amountMinor < 0 || !image) return null;
+    return {
+      id: metadata?.id || `b24-${externalId}`,
+      externalId,
+      name,
+      price: amountMinor,
+      oldPrice: metadata?.oldPrice || Math.max(amountMinor, 169000),
+      category: metadata?.category || "Унисекс",
+      image,
+      sourceUrl: metadata?.sourceUrl || "",
+      notes: metadata?.notes || [],
+      description: normalizedCatalogName(row.description, metadata?.description || "Описание аромата уточняется."),
+      available: row.available !== false,
+      stock: Number.isFinite(Number(row.stock)) ? Number(row.stock) : null,
+      source: "bitrix24",
+    };
+  }).filter(Boolean);
+  if (!liveProducts.length) throw new Error("CATALOG_EMPTY");
+  const liveIds = new Set(liveProducts.map((item) => item.id));
+  products = [...liveProducts, ...fallbackProducts.filter((item) => !liveIds.has(item.id)).map((item) => ({ ...item, available: true, source: "fallback" }))];
+  catalogConnection = "live";
+  liveProductCount = liveProducts.length;
+  catalogSyncedAt = payload.syncedAt || null;
+}
 
 const storageKey = "pdparizz-mvp-state-v4";
 const defaultState = {
@@ -797,9 +853,9 @@ const bottomNav = (active) => `<nav class="bottom-nav">
     `<a class="nav-item ${active === id ? "active" : ""}" href="?screen=${id}"><b>${icon}</b><span>${label}</span></a>`).join("")}
 </nav>`;
 
-const productCard = (item) => `<article class="product-card" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()} ${item.notes.join(" ").toLowerCase()}" data-product-category="${item.category}">
+const productCard = (item) => `<article class="product-card ${item.available === false ? "unavailable" : ""}" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()} ${item.notes.join(" ").toLowerCase()}" data-product-category="${item.category}">
   <div class="product-art"><img class="product-image" src="${item.image}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="compare-toggle ${isCompared(item.id) ? "active" : ""}" data-action="compare-toggle" data-product-id="${item.id}" aria-label="${isCompared(item.id) ? "Убрать из сравнения" : "Добавить к сравнению"}">${isCompared(item.id) ? "✓ ⇄" : "⇄"}</button><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
-  <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><div class="price">${rub(item.price)}</div></div>
+  <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><p class="availability ${item.available === false ? "unavailable" : ""}">${item.available === false ? "Нет в наличии" : item.source === "bitrix24" ? "В наличии · Битрикс24" : "В наличии"}</p><div class="price">${rub(item.price)}</div></div>
 </article>`;
 
 const demoHub = () => {
@@ -831,7 +887,7 @@ const catalog = () => `<section class="screen">
   <div class="section-head"><h2>Для вас, ${prototypeState.profile.name}</h2><span>По вашим интересам</span></div><div class="product-grid">${personalizedProducts().map(productCard).join("")}</div>
   ${prototypeState.compareProductIds.length ? `<button class="card" data-screen="compare" style="width:100%;text-align:left;margin-top:18px;border-color:#d6b56d;background:#fffaf0"><span class="row between"><span><p class="eyebrow">Выбор сохранён</p><strong>Сравнить ${prototypeState.compareProductIds.length} ${prototypeState.compareProductIds.length === 1 ? "аромат" : "аромата"}</strong></span><strong>⇄ ›</strong></span></button>` : ""}
   ${prototypeState.recentlyViewedProductIds.length ? `<div class="section-head"><h2>Недавно смотрели</h2><span>${prototypeState.recentlyViewedProductIds.length}</span></div><div class="mini-product-row">${prototypeState.recentlyViewedProductIds.map(productById).map((item) => `<button class="mini-product" data-screen="product" data-product-id="${item.id}"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><h3>${item.name}</h3><strong>${rub(item.price)}</strong></button>`).join("")}</div>` : ""}
-  <div class="section-head"><h2>Популярное</h2><span>Смотреть все</span></div>
+  <div class="section-head"><h2>Популярное</h2><span>${catalogConnection === "live" ? `${liveProductCount} из Битрикс24` : catalogConnection === "loading" ? "Обновляем каталог…" : "Демо-каталог"}</span></div>
   <div class="product-grid">${products.map(productCard).join("")}</div>
   ${bottomNav("catalog")}
 </section>`;
@@ -860,13 +916,13 @@ const product = () => { const item = selectedProduct(); const volume = Number(pr
   <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="share-btn" data-screen="product-share" aria-label="Поделиться ароматом">↗</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${item.image}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
   <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between" style="align-items:flex-start"><h1>${item.name}</h1><strong>${rub(price)}</strong></div>
   <p class="subtle">Парфюмерная вода · ${volume} мл · <s>${rub(volumeOldPrice(item, volume))}</s></p><button class="rating" data-action="open-reviews" style="border:0;background:transparent;padding:0">★★★★★ <span class="subtle">4,9 · 127 отзывов ›</span></button>
-  <p class="stock-line">● ${item.id === "aldebaran" ? "Осталось 4 флакона" : "В наличии · отправим сегодня"}</p><button class="card" data-action="watch-product" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:10px;${isPriceWatched(item.id) ? "border-color:#c99aa1;background:#fff8f8" : ""}"><span class="row between"><span><strong>${isPriceWatched(item.id) ? "Отслеживаем цену" : "Сообщить о снижении цены"}</strong><span class="subtle" style="display:block;margin-top:4px">${isPriceWatched(item.id) ? "Уведомление появится в приложении" : "Сохраним аромат и вернём вас к покупке"}</span></span><span>${isPriceWatched(item.id) ? "✓" : "+"}</span></span></button><button class="card" data-action="compare-toggle" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:18px;${isCompared(item.id) ? "border-color:#d6b56d;background:#fffaf0" : ""}"><span class="row between"><span><strong>${isCompared(item.id) ? "Добавлен к сравнению" : "Сравнить с другим ароматом"}</strong><span class="subtle" style="display:block;margin-top:4px">${isCompared(item.id) ? `${prototypeState.compareProductIds.length} из 3 выбрано · нажмите, чтобы убрать` : "Цена, ноты и характер рядом"}</span></span><span>⇄</span></span></button>
+  <p class="stock-line">● ${item.available === false ? "Сейчас нет в наличии" : item.stock > 0 ? `Осталось ${item.stock} шт.` : item.source === "bitrix24" ? "Доступность подтверждена Битрикс24" : "В наличии · отправим сегодня"}</p><button class="card" data-action="watch-product" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:10px;${isPriceWatched(item.id) ? "border-color:#c99aa1;background:#fff8f8" : ""}"><span class="row between"><span><strong>${isPriceWatched(item.id) ? "Отслеживаем цену" : "Сообщить о снижении цены"}</strong><span class="subtle" style="display:block;margin-top:4px">${isPriceWatched(item.id) ? "Уведомление появится в приложении" : "Сохраним аромат и вернём вас к покупке"}</span></span><span>${isPriceWatched(item.id) ? "✓" : "+"}</span></span></button><button class="card" data-action="compare-toggle" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:18px;${isCompared(item.id) ? "border-color:#d6b56d;background:#fffaf0" : ""}"><span class="row between"><span><strong>${isCompared(item.id) ? "Добавлен к сравнению" : "Сравнить с другим ароматом"}</strong><span class="subtle" style="display:block;margin-top:4px">${isCompared(item.id) ? `${prototypeState.compareProductIds.length} из 3 выбрано · нажмите, чтобы убрать` : "Цена, ноты и характер рядом"}</span></span><span>⇄</span></span></button>
   <h3>Выберите объём</h3><div class="volume-grid">${[15,30,50].map((value) => `<button class="volume-option ${volume === value ? "selected" : ""}" data-action="volume" data-volume="${value}"><strong>${value} мл</strong><small>${rub(volumePrice(item,value))}</small></button>`).join("")}</div>
   <div class="row between"><h3 style="margin:0">Количество</h3><div class="quantity" style="margin:0"><button data-action="product-decrease" aria-label="Уменьшить количество">−</button><strong>${quantity}</strong><button data-action="product-increase" aria-label="Увеличить количество">+</button></div></div>
   <div class="notes">${item.notes.map((note, index) => `<div class="note"><b>${note}</b><span>${["верхние ноты", "сердце", "база"][index]}</span></div>`).join("")}</div>
   <h3>Характер аромата</h3><p class="subtle">${item.description}</p>
   <div class="section-head"><h2>Похожие ароматы</h2><span data-screen="catalog">Все</span></div><div class="product-grid">${related.map(productCard).join("")}</div>
-  <div class="fixed-action"><div class="buy-actions"><button class="primary" data-action="add-to-cart">В корзину · ${quantity}</button><button class="primary rose" data-action="buy-now">Купить сейчас · ${rub(price * quantity)}</button></div></div>
+  <div class="fixed-action"><div class="buy-actions"><button class="primary" data-action="add-to-cart" ${item.available === false ? "disabled" : ""}>${item.available === false ? "Нет в наличии" : `В корзину · ${quantity}`}</button><button class="primary rose" data-action="buy-now" ${item.available === false ? "disabled" : ""}>${item.available === false ? "Сообщить о поступлении" : `Купить сейчас · ${rub(price * quantity)}`}</button></div></div>
 </section>`; };
 
 const productShare = () => { const item = selectedProduct(); const url = productShareUrl(item.id); return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Ссылка на аромат</p><h1>Поделиться</h1></div><span></span></div><div class="card share-preview"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><div><p class="eyebrow">PdParizz · ${item.category}</p><h2 style="font-size:21px;margin:4px 0 8px">${item.name}</h2><strong>${rub(item.price)} · 15 мл</strong></div></div><div class="section-head"><h2>Что увидит получатель</h2></div><div class="card"><div class="row" style="align-items:flex-start"><span class="step-number">1</span><div><strong>Сразу нужный аромат</strong><p class="subtle" style="margin:4px 0 0">Ссылка откроет эту карточку без поиска по каталогу.</p></div></div><div class="row" style="align-items:flex-start;margin-top:14px"><span class="step-number">2</span><div><strong>Источник перехода сохранится</strong><p class="subtle" style="margin:4px 0 0">В аналитике появится органический шаринг товара.</p></div></div></div><div class="section-head"><h2>Публичная ссылка</h2><span class="status">Готова</span></div><div class="card"><p class="share-link">${url}</p><button class="chip" data-action="copy-product-link" style="width:100%;margin-top:12px">Скопировать ссылку</button></div><button class="primary rose" data-action="share-product-native" style="margin-top:18px">Поделиться ароматом</button><button class="chip" data-screen="product" style="width:100%;margin-top:12px">Вернуться к товару</button><p class="subtle" style="text-align:center;margin-top:16px">На iPhone откроется стандартное меню отправки. В браузере ссылка скопируется.</p></section>`; };
@@ -1347,6 +1403,7 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "add-to-cart") {
     const id = prototypeState.selectedProductId;
+    if (productById(id).available === false) { toast("Товар временно отсутствует"); return; }
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
     prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
     prototypeState.cartVolumes[id] = Number(prototypeState.selectedVolume) || 15;
@@ -1359,6 +1416,7 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "buy-now") {
     const id = prototypeState.selectedProductId;
+    if (productById(id).available === false) { toast("Включите уведомление о поступлении"); return; }
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
     prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
     prototypeState.cartVolumes[id] = Number(prototypeState.selectedVolume) || 15;
@@ -2074,6 +2132,17 @@ if ("serviceWorker" in navigator) {
 if (deepLinkProduct) { recordRecentView(deepLinkProduct); track("product_view", { product: deepLinkProduct, source: "deep_link" }); }
 if (params.get("source") === "installed") track("screen_view", { screen: "installed_launch" });
 render(screen, { remember: false });
+loadLiveCatalog().then(() => {
+  if (deepLinkProduct && products.some((item) => item.id === deepLinkProduct)) {
+    prototypeState.selectedProductId = deepLinkProduct;
+    screen = "product";
+  }
+  render(screen, { remember: false });
+  if (screen === "catalog") toast(`Каталог обновлён · ${liveProductCount} товаров из Битрикс24`);
+}).catch(() => {
+  catalogConnection = "fallback";
+  render(screen, { remember: false });
+});
 if (hasIncomingAttribution) track("attribution_captured", { source: prototypeState.attribution.source, medium: prototypeState.attribution.medium, campaign: prototypeState.attribution.campaign, target: prototypeState.attribution.lastTarget });
 if (incomingDeepLink) track("deep_link_opened", { source: prototypeState.attribution.source, target: deepLinkProduct ? `product:${deepLinkProduct}` : requestedTarget || screen });
 if (hasIncomingAttribution || incomingDeepLink) saveState();
