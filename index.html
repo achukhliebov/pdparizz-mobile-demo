@@ -251,7 +251,7 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .quiz-progress span { display:block; height:100%; background:var(--rose); transition:width .25s ease; }
 .quiz-choice { width:100%; text-align:left; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
 .promo-strip { width:100%; border:0; text-align:left; margin:0 0 20px; background:#24201d; color:#fff; }
-.volume-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; margin:10px 0 18px; }
+.volume-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin:10px 0 18px; }
 .volume-option { min-height:58px; border:1px solid var(--line); border-radius:14px; background:var(--surface); display:grid; place-items:center; gap:2px; padding:8px; }
 .volume-option.selected { border-color:var(--rose); box-shadow:0 0 0 2px var(--rose-soft); }
 .volume-option small { color:var(--muted); font-size:10px; }
@@ -427,9 +427,11 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.35";
+const APP_VERSION = "MVP 0.36";
 const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
 const CATALOG_API_URL = "https://pdparizz-bitrix24-gateway.pdparizz-mobile.workers.dev/api/catalog/products";
+const ALLOWED_VOLUMES = [6, 15, 30];
+const normalizeVolume = (value, fallback = 15) => ALLOWED_VOLUMES.includes(Number(value)) ? Number(value) : fallback;
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
 
@@ -471,7 +473,10 @@ const siteVariantsFor = (name) => (siteVolumeImages[String(name || "").toLowerCa
 }));
 fallbackProducts.forEach((item) => {
   const variants = siteVariantsFor(item.name);
-  if (variants.length) { item.variants = variants; item.image = variants[0].image; }
+  if (variants.length) {
+    item.variants = [{ id: "site-6", volumeMl: 6, price: 17900, image: item.image, available: true, stock: null }, ...variants];
+    item.image = variants[0].image;
+  }
 });
 let products = [...fallbackProducts];
 let catalogConnection = "loading";
@@ -505,21 +510,24 @@ async function loadLiveCatalog() {
       const volumeMl = Number(variant.volumeMl);
       const variantPrice = Number(variant.price?.amountMinor);
       const variantImage = liveProductImage(variant.imageUrl);
-      if (![15, 30].includes(volumeMl) || !Number.isInteger(variantPrice) || variantPrice < 0 || !variantImage) return null;
+      if (!ALLOWED_VOLUMES.includes(volumeMl) || !Number.isInteger(variantPrice) || variantPrice < 0 || !variantImage) return null;
       return {
         id: String(variant.id || "").slice(0, 100), volumeMl, price: variantPrice,
         image: variantImage, available: variant.available !== false,
         stock: Number.isFinite(Number(variant.stock)) ? Number(variant.stock) : null,
       };
     }).filter(Boolean);
-    const siteVariants = siteVariantsFor(name);
-    const variants = [15, 30].map((volumeMl) => apiVariants.find((variant) => variant.volumeMl === volumeMl) || siteVariants.find((variant) => variant.volumeMl === volumeMl)).filter(Boolean);
     if (!externalId || !Number.isInteger(amountMinor) || amountMinor < 0 || !image) return null;
+    const siteVariants = siteVariantsFor(name);
+    const baseSixVariant = { id: `${externalId}-6`, volumeMl: 6, price: amountMinor, image, available: row.available !== false, stock: Number.isFinite(Number(row.stock)) ? Number(row.stock) : null };
+    const variants = ALLOWED_VOLUMES.map((volumeMl) => apiVariants.find((variant) => variant.volumeMl === volumeMl) || (volumeMl === 6 ? baseSixVariant : siteVariants.find((variant) => variant.volumeMl === volumeMl))).filter(Boolean);
+    const defaultVariant = variants.find((variant) => variant.volumeMl === 15);
+    if (!defaultVariant || variants.length !== ALLOWED_VOLUMES.length) return null;
     return {
       id: metadata?.id || `b24-${externalId}`,
       externalId,
       name,
-      price: amountMinor,
+      price: defaultVariant.price,
       oldPrice: metadata?.oldPrice || Math.max(amountMinor, 169000),
       category: metadata?.category || "Унисекс",
       image: variants.find((variant) => variant.volumeMl === 15)?.image || image,
@@ -540,7 +548,7 @@ async function loadLiveCatalog() {
   catalogSyncedAt = payload.syncedAt || null;
 }
 
-const storageKey = "pdparizz-mvp-state-v4";
+const storageKey = "pdparizz-mvp-state-v5";
 const defaultState = {
   cartItems: {},
   favoriteProductIds: ["hayati", "creed-aventus"],
@@ -656,8 +664,8 @@ try { storedState = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catc
 const prototypeState = { ...defaultState, ...storedState, history: [] };
 if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) prototypeState.cartItems = {};
 if (!prototypeState.cartVolumes || Array.isArray(prototypeState.cartVolumes)) prototypeState.cartVolumes = {};
-prototypeState.selectedVolume = Number(prototypeState.selectedVolume) === 30 ? 30 : 15;
-prototypeState.cartVolumes = Object.fromEntries(Object.entries(prototypeState.cartVolumes).map(([id, volume]) => [id, Number(volume) === 30 ? 30 : 15]));
+prototypeState.selectedVolume = normalizeVolume(prototypeState.selectedVolume);
+prototypeState.cartVolumes = Object.fromEntries(Object.entries(prototypeState.cartVolumes).map(([id, volume]) => [id, normalizeVolume(volume)]));
 if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
 if (!Array.isArray(prototypeState.recentlyViewedProductIds)) prototypeState.recentlyViewedProductIds = [...defaultState.recentlyViewedProductIds];
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
@@ -735,13 +743,18 @@ const markCartSaved = () => {
 };
 const productVariant = (item, volume = 15) => Array.isArray(item.variants) ? item.variants.find((variant) => variant.volumeMl === volume) : null;
 const productVolumes = (item) => {
-  const volumes = Array.isArray(item?.variants) ? item.variants.map((variant) => Number(variant.volumeMl)).filter((volume) => [15, 30].includes(volume)) : [];
-  return volumes.length ? [...new Set(volumes)].sort((a, b) => a - b) : [15, 30];
+  const volumes = Array.isArray(item?.variants) ? item.variants.map((variant) => Number(variant.volumeMl)).filter((volume) => ALLOWED_VOLUMES.includes(volume)) : [];
+  return volumes.length ? [...new Set(volumes)].sort((a, b) => a - b) : [...ALLOWED_VOLUMES];
 };
 const productImageForVolume = (item, volume = 15) => productVariant(item, volume)?.image || item.image;
-const volumePrice = (item, volume = 15) => productVariant(item, volume)?.price ?? (volume === 30 ? 79900 : item.price);
+const volumePrice = (item, volume = 15) => productVariant(item, volume)?.price ?? (volume === 6 ? 17900 : volume === 30 ? 87900 : item.price);
+const productPriceRange = (item) => {
+  const prices = productVolumes(item).map((volume) => volumePrice(item, volume));
+  const format = (minor) => new Intl.NumberFormat("ru-RU").format(minor / 100);
+  return `${format(Math.min(...prices))}–${format(Math.max(...prices))} ₽`;
+};
 const volumeOldPrice = (item, volume = 15) => Math.round(item.oldPrice * (volume / 15) * (volume === 15 ? 1 : .86));
-const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => { const item = productById(id); const volumes = productVolumes(item); const savedVolume = Number(prototypeState.cartVolumes[id]) === 30 ? 30 : 15; const volume = volumes.includes(savedVolume) ? savedVolume : volumes[0]; return { item, qty: Number(qty) || 0, volume, unitPrice: volumePrice(item, volume) }; }).filter(({ qty }) => qty > 0);
+const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => { const item = productById(id); const volumes = productVolumes(item); const savedVolume = normalizeVolume(prototypeState.cartVolumes[id]); const volume = volumes.includes(savedVolume) ? savedVolume : (volumes.includes(15) ? 15 : volumes[0]); return { item, qty: Number(qty) || 0, volume, unitPrice: volumePrice(item, volume) }; }).filter(({ qty }) => qty > 0);
 const cartItemCount = () => cartEntries().reduce((sum, entry) => sum + entry.qty, 0);
 const cartGoodsMinor = () => cartEntries().reduce((sum, { unitPrice, qty }) => sum + unitPrice * qty, 0);
 const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
@@ -905,7 +918,7 @@ const bottomNav = (active) => `<nav class="bottom-nav">
 
 const productCard = (item) => `<article class="product-card ${item.available === false ? "unavailable" : ""}" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()} ${item.notes.join(" ").toLowerCase()}" data-product-category="${item.category}">
   <div class="product-art"><img class="product-image" src="${productImageForVolume(item, 15)}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="compare-toggle ${isCompared(item.id) ? "active" : ""}" data-action="compare-toggle" data-product-id="${item.id}" aria-label="${isCompared(item.id) ? "Убрать из сравнения" : "Добавить к сравнению"}">${isCompared(item.id) ? "✓ ⇄" : "⇄"}</button><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
-  <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 15 мл</p><p class="availability ${item.available === false ? "unavailable" : ""}">${item.available === false ? "Нет в наличии" : item.source === "bitrix24" ? "В наличии · Битрикс24" : "В наличии"}</p><div class="price">${rub(item.price)}</div></div>
+  <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 6 / 15 / 30 мл</p><p class="availability ${item.available === false ? "unavailable" : ""}">${item.available === false ? "Нет в наличии" : item.source === "bitrix24" ? "В наличии · Битрикс24" : "В наличии"}</p><div class="price">${productPriceRange(item)}</div></div>
 </article>`;
 
 const demoHub = () => {
@@ -962,7 +975,7 @@ const catalogFilters = () => {
 };
 const catalogResults = () => { const items = catalogFilteredProducts(); const filters = catalogFilterCount(); return `<section class="screen"><div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">Подходящие ароматы</p><h1>Результаты</h1></div><button class="chip" data-screen="catalog-filters">Фильтры${filters ? ` · ${filters}` : ""}</button></div><div class="row between" style="margin-bottom:18px"><strong>${items.length} ${items.length === 1 ? "аромат" : "ароматов"}</strong><button class="chip" data-action="reset-catalog-filters">Сбросить</button></div>${items.length ? `<div class="product-grid">${items.map(productCard).join("")}</div>` : `<div class="card search-empty"><div class="state-icon">◇</div><h2>Слишком точный выбор</h2><p class="subtle">Уберите одну из нот или сбросьте фильтры, чтобы увидеть больше ароматов.</p><button class="primary rose" data-action="reset-catalog-filters">Показать все</button></div>`}<p class="subtle" style="margin-top:18px">Фильтры сохраняются на этом устройстве до сброса.</p></section>`; };
 
-const product = () => { const item = selectedProduct(); const volumes = productVolumes(item); const requestedVolume = Number(prototypeState.selectedVolume) === 30 ? 30 : 15; const volume = volumes.includes(requestedVolume) ? requestedVolume : volumes[0]; prototypeState.selectedVolume = volume; const variant = productVariant(item, volume); const price = volumePrice(item, volume); const available = variant?.available ?? item.available; const stock = variant?.stock ?? item.stock; const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1); const related = products.filter((productItem) => productItem.id !== item.id && productItem.category === item.category).slice(0, 2); return `<section class="screen with-action">
+const product = () => { const item = selectedProduct(); const volumes = productVolumes(item); const requestedVolume = normalizeVolume(prototypeState.selectedVolume); const volume = volumes.includes(requestedVolume) ? requestedVolume : (volumes.includes(15) ? 15 : volumes[0]); prototypeState.selectedVolume = volume; const variant = productVariant(item, volume); const price = volumePrice(item, volume); const available = variant?.available ?? item.available; const stock = variant?.stock ?? item.stock; const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1); const related = products.filter((productItem) => productItem.id !== item.id && productItem.category === item.category).slice(0, 2); return `<section class="screen with-action">
   <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="share-btn" data-screen="product-share" aria-label="Поделиться ароматом">↗</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${productImageForVolume(item, volume)}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
   <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between" style="align-items:flex-start"><h1>${item.name}</h1><strong>${rub(price)}</strong></div>
   <p class="subtle">Парфюмерная вода · ${volume} мл · <s>${rub(volumeOldPrice(item, volume))}</s></p><button class="rating" data-action="open-reviews" style="border:0;background:transparent;padding:0">★★★★★ <span class="subtle">4,9 · 127 отзывов ›</span></button>
@@ -1353,7 +1366,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "volume") {
-    prototypeState.selectedVolume = Number(actionTarget.dataset.volume) === 30 ? 30 : 15;
+    prototypeState.selectedVolume = normalizeVolume(actionTarget.dataset.volume);
     track("variant_selected", { product: prototypeState.selectedProductId, volume: `${prototypeState.selectedVolume} мл` });
     render("product", { remember: false });
     return;
@@ -1453,7 +1466,7 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "add-to-cart") {
     const id = prototypeState.selectedProductId;
-    const selectedVolume = Number(prototypeState.selectedVolume) === 30 ? 30 : 15;
+    const selectedVolume = normalizeVolume(prototypeState.selectedVolume);
     if ((productVariant(productById(id), selectedVolume)?.available ?? productById(id).available) === false) { toast("Выбранный объём временно отсутствует"); return; }
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
     prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
@@ -1467,7 +1480,7 @@ document.addEventListener("click", async (event) => {
   }
   if (action === "buy-now") {
     const id = prototypeState.selectedProductId;
-    const selectedVolume = Number(prototypeState.selectedVolume) === 30 ? 30 : 15;
+    const selectedVolume = normalizeVolume(prototypeState.selectedVolume);
     if ((productVariant(productById(id), selectedVolume)?.available ?? productById(id).available) === false) { toast("Включите уведомление о поступлении"); return; }
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
     prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
@@ -2111,8 +2124,8 @@ document.addEventListener("click", async (event) => {
       recordRecentView(screenTarget.dataset.productId);
       const openedProduct = productById(screenTarget.dataset.productId);
       const openedVolumes = productVolumes(openedProduct);
-      const savedVolume = Number(prototypeState.cartVolumes[screenTarget.dataset.productId]) === 30 ? 30 : 15;
-      prototypeState.selectedVolume = openedVolumes.includes(savedVolume) ? savedVolume : openedVolumes[0];
+      const savedVolume = normalizeVolume(prototypeState.cartVolumes[screenTarget.dataset.productId]);
+      prototypeState.selectedVolume = openedVolumes.includes(savedVolume) ? savedVolume : (openedVolumes.includes(15) ? 15 : openedVolumes[0]);
       prototypeState.productQuantity = 1;
       track("product_view", { product: screenTarget.dataset.productId });
     }
