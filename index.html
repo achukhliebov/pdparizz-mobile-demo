@@ -240,6 +240,10 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .field input, .field textarea { width: 100%; border: 0; outline: 0; resize:none; background: transparent; color: var(--ink); font-size: 14px; }
 .otp-grid { display: grid; grid-template-columns: repeat(4, 58px); justify-content: center; gap: 10px; }
 .otp-input { width: 58px; height: 64px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: center; font-size: 24px; font-weight: 750; color: var(--ink); }
+.auth-benefits { display:grid; gap:9px; margin:0 0 18px; }
+.auth-benefit { display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:14px; background:var(--tiffany-soft); color:var(--tiffany-deep); font-size:12px; font-weight:720; }
+.auth-benefit b { width:25px; height:25px; border-radius:50%; display:grid; place-items:center; background:#fff; flex:none; }
+.auth-secondary { width:100%; margin-top:10px; padding:12px; border:0; background:transparent; color:var(--tiffany-deep); font-weight:750; }
 .install-logo { width: 92px; height: 92px; border-radius: 24px; background: var(--rose); color: #fff; display: grid; place-items: center; font: 52px Georgia, serif; box-shadow: 0 14px 30px rgba(165,84,97,.24); }
 .install-step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 13px 0; border-bottom: 1px solid var(--line); }
 .install-step:last-child { border-bottom: 0; }
@@ -459,11 +463,17 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.39 Tiffany orders";
-const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=catalog&v=42-orders";
+const APP_VERSION = "MVP 0.40 Tiffany cart variants";
+const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=catalog&v=43-cart-variants";
 const CATALOG_API_URL = "https://pdparizz-bitrix24-gateway.pdparizz-mobile.workers.dev/api/catalog/products";
 const ALLOWED_VOLUMES = [6, 15, 30];
 const normalizeVolume = (value, fallback = 15) => ALLOWED_VOLUMES.includes(Number(value)) ? Number(value) : fallback;
+const cartLineKey = (productId, volume) => `${productId}::${normalizeVolume(volume)}`;
+const cartLineParts = (key, legacyVolumes = {}) => {
+  const separator = key.lastIndexOf("::");
+  if (separator > 0) return { id: key.slice(0, separator), volume: normalizeVolume(key.slice(separator + 2)) };
+  return { id: key, volume: normalizeVolume(legacyVolumes[key]) };
+};
 let screen = params.get("screen") || "catalog";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
 
@@ -698,6 +708,12 @@ if (!prototypeState.cartItems || Array.isArray(prototypeState.cartItems)) protot
 if (!prototypeState.cartVolumes || Array.isArray(prototypeState.cartVolumes)) prototypeState.cartVolumes = {};
 prototypeState.selectedVolume = normalizeVolume(prototypeState.selectedVolume);
 prototypeState.cartVolumes = Object.fromEntries(Object.entries(prototypeState.cartVolumes).map(([id, volume]) => [id, normalizeVolume(volume)]));
+prototypeState.cartItems = Object.entries(prototypeState.cartItems).reduce((lines, [savedKey, quantity]) => {
+  const { id, volume } = cartLineParts(savedKey, prototypeState.cartVolumes);
+  const key = cartLineKey(id, volume);
+  lines[key] = (Number(lines[key]) || 0) + (Number(quantity) || 0);
+  return lines;
+}, {});
 if (!Array.isArray(prototypeState.favoriteProductIds)) prototypeState.favoriteProductIds = [...defaultState.favoriteProductIds];
 if (!Array.isArray(prototypeState.recentlyViewedProductIds)) prototypeState.recentlyViewedProductIds = [...defaultState.recentlyViewedProductIds];
 if (!prototypeState.profile) prototypeState.profile = { ...defaultState.profile };
@@ -786,7 +802,15 @@ const productPriceRange = (item) => {
   return `${format(Math.min(...prices))}–${format(Math.max(...prices))} ₽`;
 };
 const volumeOldPrice = (item, volume = 15) => Math.round(item.oldPrice * (volume / 15) * (volume === 15 ? 1 : .86));
-const cartEntries = () => Object.entries(prototypeState.cartItems).map(([id, qty]) => { const item = productById(id); const volumes = productVolumes(item); const savedVolume = normalizeVolume(prototypeState.cartVolumes[id]); const volume = volumes.includes(savedVolume) ? savedVolume : (volumes.includes(15) ? 15 : volumes[0]); return { item, qty: Number(qty) || 0, volume, unitPrice: volumePrice(item, volume) }; }).filter(({ qty }) => qty > 0);
+const cartEntries = () => Object.entries(prototypeState.cartItems).map(([key, qty]) => { const { id, volume: requestedVolume } = cartLineParts(key); const item = productById(id); const volumes = productVolumes(item); const volume = volumes.includes(requestedVolume) ? requestedVolume : (volumes.includes(15) ? 15 : volumes[0]); return { key, id, item, qty: Number(qty) || 0, volume, unitPrice: volumePrice(item, volume) }; }).filter(({ qty }) => qty > 0);
+const replaceCartFromOrder = (entries) => {
+  prototypeState.cartItems = (entries || []).reduce((lines, { id, qty, volume = 15 }) => {
+    const key = cartLineKey(id, volume);
+    lines[key] = (Number(lines[key]) || 0) + (Number(qty) || 0);
+    return lines;
+  }, {});
+  prototypeState.cartVolumes = {};
+};
 const cartItemCount = () => cartEntries().reduce((sum, entry) => sum + entry.qty, 0);
 const cartGoodsMinor = () => cartEntries().reduce((sum, { unitPrice, qty }) => sum + unitPrice * qty, 0);
 const isFavorite = (id) => prototypeState.favoriteProductIds.includes(id);
@@ -1037,7 +1061,7 @@ const cart = () => {
   const total = orderTotalMinor();
   return `<section class="screen with-action">
     <div class="topline"><button class="back-btn" data-action="back">‹</button><div><p class="eyebrow">${cartItemCount()} ${cartItemCount() === 1 ? "товар" : "товара"}</p><h1>Корзина</h1></div><span class="status">Сохранено</span></div>
-    ${entries.map(({ item, qty, volume, unitPrice }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${productImageForVolume(item, volume)}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${rub(unitPrice)}</p><div class="quantity"><button data-action="decrease" data-product-id="${item.id}" aria-label="Уменьшить ${item.name}">−</button><strong>${qty}</strong><button data-action="increase" data-product-id="${item.id}" aria-label="Увеличить ${item.name}">+</button></div></div><strong>${rub(unitPrice * qty)}</strong></div></div>`).join("")}
+    ${entries.map(({ key, item, qty, volume, unitPrice }) => `<div class="card" style="margin-bottom:10px"><div class="cart-line"><div class="thumb"><img src="${productImageForVolume(item, volume)}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${volume} мл · ${rub(unitPrice)}</p><div class="quantity"><button data-action="decrease" data-cart-key="${key}" aria-label="Уменьшить ${item.name}, ${volume} мл">−</button><strong>${qty}</strong><button data-action="increase" data-cart-key="${key}" aria-label="Увеличить ${item.name}, ${volume} мл">+</button></div></div><strong>${rub(unitPrice * qty)}</strong></div></div>`).join("")}
     <button class="card loyalty-toggle row between" data-action="points" style="margin-top:12px;width:100%;text-align:left" ${prototypeState.points > 0 ? "" : "disabled"}><div class="row"><span class="coin">P</span><div><h3>${prototypeState.points <= 0 ? "Баллов пока нет" : prototypeState.usePoints ? `Списываем ${new Intl.NumberFormat("ru-RU").format(points / 100)} баллов` : "Использовать баллы"}</h3><p class="subtle" style="margin:0">${prototypeState.points > 0 ? `Доступно ${new Intl.NumberFormat("ru-RU").format(prototypeState.points)} · до 30% заказа` : "Начислим после доставки следующего заказа"}</p></div></div><span class="switch ${prototypeState.points > 0 && prototypeState.usePoints ? "" : "off"}"></span></button>
     <div class="field" style="margin-top:12px"><label>Промокод ${prototypeState.promoApplied ? `· скидка ${Math.round(promoRate() * 100)}%` : ""}</label><div class="promo-row"><input id="promo-code" value="${prototypeState.promoCode || ""}" placeholder="Введите промокод" /><button data-action="promo">${prototypeState.promoApplied ? "Отменить" : "Применить"}</button></div></div>
     ${promo + points ? `<div class="cart-benefit">Ваша выгода в этом заказе — ${rub(promo + points)}</div>` : ""}
@@ -1091,7 +1115,7 @@ const order = () => { const entries = prototypeState.lastOrder || defaultState.l
   <div class="timeline">${stage.id === "cancelled" ? `<div class="timeline-item done"><h3>Заказ подтверждён</h3><p class="subtle">Оплата была получена</p></div><div class="timeline-item done"><h3>Заказ отменён</h3><p class="subtle">Возврат оформлен автоматически</p></div>` : orderStages.map((item, index) => `<div class="timeline-item ${index <= stageIndex ? "done" : ""}"><h3>${item.title}</h3><p class="subtle">${index < stageIndex ? "Выполнено" : index === stageIndex ? item.body : "Ожидается"}</p></div>`).join("")}</div>
   ${stage.id === "delivered" ? `<div class="card loyalty-toggle"><div class="row"><span class="coin">P</span><div><h3>Баллы начислены</h3><p class="subtle" style="margin:0">Награда уже в вашем кошельке</p></div></div></div>` : ""}
   ${stage.id === "cancelled" ? `<div class="card loyalty-toggle"><div class="row"><span class="state-icon" style="width:38px;height:38px;margin:0;font-size:16px">↩</span><div><h3>Возврат оформлен</h3><p class="subtle" style="margin:0">${prototypeState.lastOrderPointsUsed ? `${prototypeState.lastOrderPointsUsed} баллов уже возвращены` : "Деньги вернутся тем же способом"}</p></div></div></div>` : ""}
-  <div class="card">${entries.map(({ id, qty, volume = 15 }) => { const item = productById(id); const safeVolume = Number(volume) === 30 ? 30 : 15; const unitPrice = volumePrice(item, safeVolume); return `<div class="cart-line"><div class="thumb"><img src="${productImageForVolume(item, safeVolume)}" alt="${item.name}, ${safeVolume} мл" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${safeVolume} мл · ${qty} × ${rub(unitPrice)}</p></div><strong>${rub(unitPrice * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>${stage.id === "cancelled" ? "Возвращено" : "Оплачено"}</span><span>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)}</span></div></div></div>
+  <div class="card">${entries.map(({ id, qty, volume = 15 }) => { const item = productById(id); const safeVolume = normalizeVolume(volume); const unitPrice = volumePrice(item, safeVolume); return `<div class="cart-line"><div class="thumb"><img src="${productImageForVolume(item, safeVolume)}" alt="${item.name}, ${safeVolume} мл" referrerpolicy="no-referrer" /></div><div><h3>${item.name}</h3><p class="subtle">${safeVolume} мл · ${qty} × ${rub(unitPrice)}</p></div><strong>${rub(unitPrice * qty)}</strong></div>`; }).join("")}<div class="summary"><div class="row total"><span>${stage.id === "cancelled" ? "Возвращено" : "Оплачено"}</span><span>${rub(prototypeState.lastOrderTotal ?? defaultState.lastOrderTotal)}</span></div></div></div>
   <div class="tracking-actions"><button class="chip" data-screen="support">Написать в поддержку</button><button class="chip" data-action="reorder">Повторить покупку</button></div>
   ${stage.id === "delivered" || stage.id === "cancelled" ? `<button class="primary" data-action="reorder" style="margin-top:10px">Повторить заказ</button>` : `<div class="row" style="margin-top:12px">${canCancelOrder() ? `<button class="chip" data-screen="order-cancel">Отменить заказ</button>` : `<span class="subtle">После передачи курьеру отмена доступна через поддержку.</span>`}</div><div class="fixed-action"><button class="primary rose" data-action="next-order-status">Демо: следующий статус</button></div>`}
 </section>`; };
@@ -1121,9 +1145,9 @@ const profile = () => `<section class="screen"><div class="topline"><div><p clas
   <div class="menu"><p class="menu-title">Покупки и доставка</p><div class="menu-row" data-screen="addresses"><span>Адреса доставки</span><b>›</b></div><div class="menu-row" data-screen="watchlist"><span>Слежу за ценой · ${prototypeState.priceWatchProductIds.length}</span><b>›</b></div><div class="menu-row" data-screen="subscription"><span>${prototypeState.subscription ? "Подписка активна" : "Подписка PdParizz"}</span><b>›</b></div><div class="menu-row" data-screen="wheel"><span>Колесо подарков</span><b>›</b></div><p class="menu-title">Настройки</p><div class="menu-row" data-screen="profile-edit"><span>Личные данные и уведомления</span><b>›</b></div><div class="menu-row" data-screen="install"><span>${isStandalone() ? "Приложение установлено" : "Установить на телефон"}</span><b>›</b></div><div class="menu-row" data-screen="privacy"><span>Конфиденциальность</span><b>›</b></div><button class="chip" data-action="logout" style="width:100%;margin-top:18px">Выйти из аккаунта</button></div>
   ${bottomNav("profile")}</section>`;
 
-const authPhone = () => `<section class="screen with-action" style="padding-top:70px"><p class="eyebrow">PdParizz</p><h1 style="font-size:40px;max-width:280px">Всё любимое — рядом</h1><p class="subtle" style="margin:18px 0 24px;max-width:300px">Войдите, чтобы видеть заказы, баллы и персональные предложения.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#81d8d0;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>По 300 баллов каждому</h3><p class="subtle" style="margin:0">Код ${prototypeState.referralCode}. Награда разблокируется после доставки вашего первого заказа.</p></div>` : ""}<div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" /></div><p class="subtle">Отправляя номер, вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button></div></section>`;
+const authPhone = () => `<section class="screen with-action" style="padding-top:46px"><p class="eyebrow">PdParizz ID</p><h1 style="font-size:38px;max-width:310px">Всё любимое — рядом</h1><p class="subtle" style="margin:14px 0 20px;max-width:320px">Один номер телефона сохраняет покупки и привилегии на любом устройстве.</p>${prototypeState.referralRewardPending ? `<div class="card" style="border-color:#81d8d0;margin-bottom:14px"><p class="eyebrow">Подарок от друга</p><h3>По 300 баллов каждому</h3><p class="subtle" style="margin:0">Код ${prototypeState.referralCode}. Награда разблокируется после доставки вашего первого заказа.</p></div>` : ""}<div class="auth-benefits"><div class="auth-benefit"><b>✓</b>Баллы и история заказов не потеряются</div><div class="auth-benefit"><b>✓</b>Статус доставки всегда под рукой</div><div class="auth-benefit"><b>✓</b>Без пароля — только короткий код</div></div><div class="field"><label>Номер телефона</label><input id="auth-phone-input" value="${prototypeState.loginPhone || prototypeState.profile.phone}" inputmode="tel" autocomplete="tel" aria-label="Номер телефона" /></div><p class="subtle" style="font-size:11px">Нажимая «Получить код», вы соглашаетесь с обработкой персональных данных.</p><div class="fixed-action"><button class="primary rose" data-action="send-code">Получить код</button><button class="auth-secondary" data-action="auth-guest">Продолжить без входа</button></div></section>`;
 
-const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-action="back">‹</button><span></span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на ${prototypeState.loginPhone}</p><div class="otp-grid">${[0,1,2,3].map((index) => `<input class="otp-input" aria-label="Цифра ${index + 1}" inputmode="numeric" maxlength="1" pattern="[0-9]*" />`).join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Демо-код: <strong>0000</strong></p><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
+const authCode = () => `<section class="screen with-action"><div class="topline"><button class="back-btn" data-screen="auth-phone">‹</button><span class="status">Без пароля</span></div><p class="eyebrow">Подтверждение</p><h1>Введите код</h1><p class="subtle" style="margin:14px 0 30px">Отправили на ${prototypeState.loginPhone}</p><div class="otp-grid">${[0,1,2,3].map((index) => `<input class="otp-input" aria-label="Цифра ${index + 1}" inputmode="numeric" maxlength="1" pattern="[0-9]*" autocomplete="one-time-code" />`).join("")}</div><p class="subtle" style="text-align:center;margin-top:20px">Демо-код: <strong>0000</strong></p><button class="auth-secondary" data-action="resend-code">Отправить код ещё раз</button><button class="auth-secondary" data-screen="auth-phone">Изменить номер телефона</button><div class="fixed-action"><button class="primary" data-action="login">Продолжить</button></div></section>`;
 
 const profileEdit = () => `<section class="screen with-action"><div class="topline"><button class="back-btn">‹</button><h1>Личные данные</h1><span></span></div><div class="field"><label>Имя</label><input id="profile-name" value="${prototypeState.profile.name}" /></div><div class="field"><label>Телефон</label><input id="profile-phone" value="${prototypeState.profile.phone}" inputmode="tel" /></div><div class="field"><label>Email</label><input id="profile-email" value="${prototypeState.profile.email}" inputmode="email" /></div><div class="section-head"><h2>Уведомления</h2></div><div class="card"><button class="menu-row" data-action="push-toggle" data-push="orders" style="width:100%;border:0;background:transparent;text-align:left"><div><h3>Статусы заказов</h3><p class="subtle" style="margin:0">Важные push-уведомления</p></div><span class="switch ${prototypeState.pushOrders ? "" : "off"}"></span></button><button class="menu-row" data-action="push-toggle" data-push="marketing" style="width:100%;border:0;background:transparent;text-align:left"><div><h3>Акции и новинки</h3><p class="subtle" style="margin:0">Только с вашего согласия</p></div><span class="switch ${prototypeState.pushMarketing ? "" : "off"}"></span></button></div><div class="fixed-action"><button class="primary" data-action="save-profile">Сохранить</button></div></section>`;
 
@@ -1389,7 +1413,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "quiz-add-all") {
-    prototypeState.quizResultIds.forEach((id) => { prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + 1; prototypeState.cartVolumes[id] = 15; });
+    prototypeState.quizResultIds.forEach((id) => { const key = cartLineKey(id, 15); prototypeState.cartItems[key] = (Number(prototypeState.cartItems[key]) || 0) + 1; });
     markCartSaved();
     track("add_to_cart", { product: "quiz_bundle", count: prototypeState.quizResultIds.length });
     render("cart");
@@ -1397,8 +1421,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (action === "reorder") {
-    prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty]));
-    prototypeState.cartVolumes = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, volume = 15 }) => [id, volume]));
+    replaceCartFromOrder(prototypeState.lastOrder || defaultState.lastOrder);
     prototypeState.promoApplied = false;
     prototypeState.pendingPurchaseOrigin = "reorder";
     markCartSaved();
@@ -1511,10 +1534,10 @@ document.addEventListener("click", async (event) => {
     const selectedVolume = normalizeVolume(prototypeState.selectedVolume);
     if ((productVariant(productById(id), selectedVolume)?.available ?? productById(id).available) === false) { toast("Выбранный объём временно отсутствует"); return; }
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
-    prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
-    prototypeState.cartVolumes[id] = selectedVolume;
+    const key = cartLineKey(id, selectedVolume);
+    prototypeState.cartItems[key] = (Number(prototypeState.cartItems[key]) || 0) + quantity;
     markCartSaved();
-    track("add_to_cart", { product: id, volume: `${prototypeState.cartVolumes[id]} мл`, quantity });
+    track("add_to_cart", { product: id, volume: `${selectedVolume} мл`, quantity });
     saveState();
     toast(`${quantity} шт. добавлено в корзину`);
     setTimeout(() => render("cart"), 250);
@@ -1525,20 +1548,20 @@ document.addEventListener("click", async (event) => {
     const selectedVolume = normalizeVolume(prototypeState.selectedVolume);
     if ((productVariant(productById(id), selectedVolume)?.available ?? productById(id).available) === false) { toast("Включите уведомление о поступлении"); return; }
     const quantity = Math.max(1, Number(prototypeState.productQuantity) || 1);
-    prototypeState.cartItems[id] = (Number(prototypeState.cartItems[id]) || 0) + quantity;
-    prototypeState.cartVolumes[id] = selectedVolume;
+    const key = cartLineKey(id, selectedVolume);
+    prototypeState.cartItems[key] = (Number(prototypeState.cartItems[key]) || 0) + quantity;
     markCartSaved();
-    track("buy_now", { product: id, volume: `${prototypeState.cartVolumes[id]} мл`, quantity });
+    track("buy_now", { product: id, volume: `${selectedVolume} мл`, quantity });
     track("checkout_started", { items: cartItemCount(), source: "buy_now" });
     render("checkout");
     toast("Товар добавлен · осталось подтвердить заказ");
     return;
   }
   if (action === "increase" || action === "decrease") {
-    const id = actionTarget.dataset.productId;
-    const nextQty = Math.max(0, (Number(prototypeState.cartItems[id]) || 0) + (action === "increase" ? 1 : -1));
-    if (nextQty) prototypeState.cartItems[id] = nextQty;
-    else { delete prototypeState.cartItems[id]; delete prototypeState.cartVolumes[id]; }
+    const key = actionTarget.dataset.cartKey;
+    const nextQty = Math.max(0, (Number(prototypeState.cartItems[key]) || 0) + (action === "increase" ? 1 : -1));
+    if (nextQty) prototypeState.cartItems[key] = nextQty;
+    else delete prototypeState.cartItems[key];
     if (cartItemCount()) markCartSaved(); else prototypeState.cartSavedAt = null;
     render("cart", { remember: false });
     return;
@@ -1905,6 +1928,19 @@ document.addEventListener("click", async (event) => {
     toast("Код отправлен · в демо используйте 0000");
     return;
   }
+  if (action === "resend-code") {
+    track("otp_resent", { method: "phone" });
+    toast("Новый код отправлен · в демо используйте 0000");
+    document.querySelector(".otp-input")?.focus();
+    return;
+  }
+  if (action === "auth-guest") {
+    prototypeState.isAuthenticated = false;
+    track("auth_skipped", { source: "phone_screen" });
+    render("catalog");
+    toast("Каталог открыт без входа · войти можно позже в профиле");
+    return;
+  }
   if (action === "login") {
     const code = [...document.querySelectorAll(".otp-input")].map((input) => input.value).join("");
     if (code !== "0000") { toast("Неверный код · введите 0000"); return; }
@@ -2166,7 +2202,8 @@ document.addEventListener("click", async (event) => {
       recordRecentView(screenTarget.dataset.productId);
       const openedProduct = productById(screenTarget.dataset.productId);
       const openedVolumes = productVolumes(openedProduct);
-      const savedVolume = normalizeVolume(prototypeState.cartVolumes[screenTarget.dataset.productId]);
+      const savedLine = cartEntries().find((entry) => entry.id === screenTarget.dataset.productId && entry.volume === 15) || cartEntries().find((entry) => entry.id === screenTarget.dataset.productId);
+      const savedVolume = normalizeVolume(savedLine?.volume);
       prototypeState.selectedVolume = openedVolumes.includes(savedVolume) ? savedVolume : (openedVolumes.includes(15) ? 15 : openedVolumes[0]);
       prototypeState.productQuantity = 1;
       track("product_view", { product: screenTarget.dataset.productId });
@@ -2180,7 +2217,7 @@ document.addEventListener("click", async (event) => {
   const label = button?.textContent.trim() || "";
   if (label === "Перейти в каталог" || label === "Найти аромат" || label === "Выбрать аромат" || label === "Сбросить фильтры" || label === "Повторить") render("catalog");
   else if (label === "Попробовать ещё раз" || label === "Выбрать другой способ") render("checkout");
-  else if (label === "Повторить заказ") { prototypeState.cartItems = Object.fromEntries((prototypeState.lastOrder || defaultState.lastOrder).map(({ id, qty }) => [id, qty])); prototypeState.pendingPurchaseOrigin = "reorder"; track("reorder_started", { order: "SIM-00001", items: cartItemCount() }); render("cart"); }
+  else if (label === "Повторить заказ") { replaceCartFromOrder(prototypeState.lastOrder || defaultState.lastOrder); prototypeState.pendingPurchaseOrigin = "reorder"; track("reorder_started", { order: "SIM-00001", items: cartItemCount() }); render("cart"); }
   else if (button?.closest(".switch") || button?.classList.contains("switch")) button.classList.toggle("off");
 
 });
