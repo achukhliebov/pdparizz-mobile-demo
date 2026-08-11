@@ -128,28 +128,28 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .chip.active { border-color: var(--ink); background: var(--ink); color: #fff; }
 
 .hero {
-  min-height: 176px; border-radius: var(--radius-lg); padding: 22px; color: #fff; margin-bottom: 24px;
+  min-height: 142px; border-radius: var(--radius-lg); padding: 20px; color: #fff; margin-bottom: 18px;
   background: radial-gradient(circle at 85% 20%, rgba(255,255,255,.45), transparent 23%), linear-gradient(140deg, #5bc7be, #a6e7e1);
   position: relative; overflow: hidden;
 }
 .hero::after { content: "P"; position: absolute; right: 18px; bottom: -40px; font: 150px Georgia, serif; color: rgba(255,255,255,.12); }
-.hero h2 { width: 68%; font-size: 28px; margin-top: 30px; }
+.hero h2 { width: 72%; font-size: 25px; margin: 20px 0 8px; }
 .hero p { font-size: 12px; color: rgba(255,255,255,.8); }
 
 .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 0 12px; }
 .section-head h2 { margin: 0; }
 .section-head span { color: var(--rose); font-size: 12px; }
-.product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.product-card { min-width: 0; }
+.product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 12px; }
+.product-card { min-width: 0; content-visibility: auto; }
 .product-card.unavailable .product-art { filter: saturate(.45); opacity: .72; }
 .availability { margin-top: 5px !important; color: var(--success) !important; font-weight: 700; }
 .availability.unavailable { color: var(--muted) !important; }
 .product-art {
-  aspect-ratio: 1 / 1.18; border-radius: var(--radius-md); position: relative; overflow: hidden;
+  aspect-ratio: 1 / 1.06; border-radius: var(--radius-md); position: relative; overflow: hidden;
   background: radial-gradient(circle at 70% 18%, #fff 0 4%, transparent 32%), linear-gradient(150deg, #e9f8f6, #b7e5e0);
 }
 .product-card:nth-child(even) .product-art { background: radial-gradient(circle at 72% 17%, #fff 0 3%, transparent 30%), linear-gradient(150deg, #f2fbfa, #9fd9d3); }
-.product-image { width: 100%; height: 100%; object-fit: contain; padding: 12px; background: #f4f0e8; display: block; }
+.product-image { width: 100%; height: 100%; object-fit: contain; padding: 10px; background: linear-gradient(160deg,#fff,#eef9f7); display: block; }
 .bottle {
   position: absolute; width: 62px; height: 89px; left: 50%; top: 51%; transform: translate(-50%, -50%);
   background: rgba(255,255,255,.72); border: 1px solid rgba(70,55,42,.25); border-radius: 5px 5px 12px 12px; box-shadow: 0 12px 18px rgba(53,35,22,.16);
@@ -160,9 +160,12 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .compare-toggle { position: absolute; top: 10px; left: 10px; min-width: 32px; height: 32px; padding: 0 9px; border: 0; border-radius: 999px; background: rgba(255,255,255,.86); font-size: 12px; font-weight: 800; }
 .compare-toggle.active { background: var(--ink); color: #fff; }
 .product-meta { padding: 10px 2px 0; }
-.product-meta h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-meta h3 { min-height: 38px; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
 .product-meta p { margin: 0; color: var(--muted); font-size: 11px; }
-.price { margin-top: 7px; font-weight: 750; font-size: 14px; }
+.card-volume { margin-top: 5px !important; color: var(--tiffany-deep) !important; font-weight: 750; }
+.price { display:flex; align-items:baseline; justify-content:space-between; gap:6px; margin-top: 8px; padding-top:8px; border-top:1px solid var(--line); }
+.price small { color:var(--muted); font-size:10px; font-weight:600; }
+.price strong { font-size:14px; }
 
 .bottom-nav {
   position: absolute; inset: auto 0 0; height: 78px; padding: 10px 16px 18px; background: rgba(255,253,248,.96); border-top: 1px solid var(--line);
@@ -172,8 +175,8 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .nav-item b { font-size: 18px; line-height: 1; font-weight: 500; }
 .nav-item.active { color: var(--rose); }
 
-.product-hero { height: 330px; margin: -18px -18px 22px; position: relative; background: linear-gradient(145deg, #e8f8f6, #9fd9d3); }
-.product-hero-image { width: 100%; height: 100%; object-fit: contain; padding: 24px 38px; background: #f1ece3; display: block; }
+.product-hero { height: 286px; margin: -18px -18px 22px; position: relative; background: linear-gradient(145deg, #e8f8f6, #9fd9d3); }
+.product-hero-image { width: 100%; height: 100%; object-fit: contain; padding: 20px 38px; background: linear-gradient(155deg,#fff,#e5f6f3); display: block; }
 .product-hero .bottle { width: 112px; height: 165px; border-radius: 9px 9px 20px 20px; }
 .product-hero .bottle::before { width: 48px; height: 23px; top: -23px; left: 31px; }
 .product-hero .bottle::after { left: 20px; right: 20px; top: 68px; font-size: 16px; padding: 10px 0; }
@@ -258,6 +261,8 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .volume-option { min-height:58px; border:1px solid var(--line); border-radius:14px; background:var(--surface); display:grid; place-items:center; gap:2px; padding:8px; }
 .volume-option.selected { border-color:var(--rose); box-shadow:0 0 0 2px var(--rose-soft); }
 .volume-option small { color:var(--muted); font-size:10px; }
+.product-secondary-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 20px; }
+.product-secondary-actions button { min-height:42px; border:1px solid var(--line); border-radius:13px; background:var(--surface); color:var(--tiffany-deep); font-size:11px; font-weight:750; }
 .stock-line { color:var(--success); font-size:12px; font-weight:750; margin:12px 0; }
 .buy-actions { display:grid; grid-template-columns:1fr 1.25fr; gap:9px; }
 .review-stars { color:var(--gold); letter-spacing:.08em; }
@@ -430,8 +435,8 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.36";
-const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=demo-hub";
+const APP_VERSION = "MVP 0.37 Tiffany";
+const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=catalog&v=39-uiux";
 const CATALOG_API_URL = "https://pdparizz-bitrix24-gateway.pdparizz-mobile.workers.dev/api/catalog/products";
 const ALLOWED_VOLUMES = [6, 15, 30];
 const normalizeVolume = (value, fallback = 15) => ALLOWED_VOLUMES.includes(Number(value)) ? Number(value) : fallback;
@@ -921,7 +926,7 @@ const bottomNav = (active) => `<nav class="bottom-nav">
 
 const productCard = (item) => `<article class="product-card ${item.available === false ? "unavailable" : ""}" data-screen="product" data-product-id="${item.id}" data-product-name="${item.name.toLowerCase()} ${item.notes.join(" ").toLowerCase()}" data-product-category="${item.category}">
   <div class="product-art"><img class="product-image" src="${productImageForVolume(item, 15)}" alt="${item.name}, 15 мл" loading="lazy" referrerpolicy="no-referrer" /><button class="compare-toggle ${isCompared(item.id) ? "active" : ""}" data-action="compare-toggle" data-product-id="${item.id}" aria-label="${isCompared(item.id) ? "Убрать из сравнения" : "Добавить к сравнению"}">${isCompared(item.id) ? "✓ ⇄" : "⇄"}</button><button class="heart" data-action="favorite" data-product-id="${item.id}" aria-label="В избранное">${isFavorite(item.id) ? "♥" : "♡"}</button></div>
-  <div class="product-meta"><h3>${item.name}</h3><p>${item.category} · 6 / 15 / 30 мл</p><p class="availability ${item.available === false ? "unavailable" : ""}">${item.available === false ? "Нет в наличии" : item.source === "bitrix24" ? "В наличии · Битрикс24" : "В наличии"}</p><div class="price">${productPriceRange(item)}</div></div>
+  <div class="product-meta"><h3>${item.name}</h3><p>${item.category}</p><p class="card-volume">6 · 15 · 30 мл</p><p class="availability ${item.available === false ? "unavailable" : ""}">${item.available === false ? "Нет в наличии" : "В наличии"}</p><div class="price"><small>Диапазон цен</small><strong>${productPriceRange(item)}</strong></div></div>
 </article>`;
 
 const demoHub = () => {
@@ -946,15 +951,16 @@ const catalog = () => `<section class="screen">
   <div class="catalog-tools"><button class="search" data-screen="catalog-search" aria-label="Открыть поиск">⌕ <span>Поиск по ароматам и нотам</span></button><button class="icon-btn" data-screen="catalog-filters" aria-label="Фильтры каталога">≡</button></div>
   <div class="chips">${[["Все","Все"],["Женский","Женские"],["Мужской","Мужские"],["Унисекс","Унисекс"]].map(([value,label]) => `<button class="chip ${prototypeState.catalogFilter === value ? "active" : ""}" data-action="filter" data-filter="${value}">${label}</button>`).join("")}</div>
   <button class="hero" data-action="promo-quiz" style="width:100%;border:0;text-align:left"><p class="eyebrow" style="color:#fff">Подбор за минуту</p><h2>Найдём аромат под ваше настроение</h2><p>Три вопроса · персональная подборка →</p></button>
-  ${prototypeState.referralRewardPending && prototypeState.referralFriendRegistered ? `<button class="card" data-action="${prototypeState.referralDemoActive ? "referral-demo-order" : ""}" data-screen="${prototypeState.referralDemoActive ? "" : "product"}" data-product-id="hayati" style="width:100%;text-align:left;margin-bottom:14px;border-color:#d6b56d;background:#fffaf0"><div class="row between"><div><p class="eyebrow">Подарок закреплён</p><h3>По 300 баллов вам и другу</h3><p class="subtle" style="margin:0">Оформите и получите первый заказ</p></div><strong>›</strong></div></button>` : ""}
-  ${cartItemCount() && !prototypeState.cartRecoveryDismissed ? `<div class="card recovery-card"><div class="row between" style="align-items:flex-start"><button data-screen="cart" data-action="recover-cart" style="flex:1;border:0;background:transparent;color:inherit;text-align:left;padding:0"><p class="eyebrow" style="color:#d9b46a">Сохранили для вас</p><h2 style="margin-bottom:6px">В корзине ${cartItemCount()} ${cartItemCount() === 1 ? "аромат" : "аромата"}</h2><p class="subtle" style="margin:0">Продолжить оформление · ${rub(cartGoodsMinor())} →</p></button><button class="chip" data-action="dismiss-cart-recovery" style="color:#fff;border-color:#77685d">Скрыть</button></div></div>` : ""}
-  <button class="card" data-screen="offers" style="width:100%;text-align:left;margin-bottom:12px;border-color:#9fd9d3;background:#effafa"><div class="row between"><div><p class="eyebrow">Только для вас</p><h3>Скидка 15% и бесплатная доставка</h3><p class="subtle" style="margin:0">Активируйте предложения перед заказом</p></div><strong>›</strong></div></button>
-  <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#d9b46a">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfc7bf;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
-  <div class="section-head"><h2>Для вас, ${prototypeState.profile.name}</h2><span>По вашим интересам</span></div><div class="product-grid">${personalizedProducts().map(productCard).join("")}</div>
+  <div class="section-head"><h2>Популярное</h2><span>${catalogConnection === "live" ? "Актуальные цены" : "Демо-каталог"}</span></div>
+  <div class="product-grid">${products.slice(0, 4).map(productCard).join("")}</div>
   ${prototypeState.compareProductIds.length ? `<button class="card" data-screen="compare" style="width:100%;text-align:left;margin-top:18px;border-color:#d6b56d;background:#fffaf0"><span class="row between"><span><p class="eyebrow">Выбор сохранён</p><strong>Сравнить ${prototypeState.compareProductIds.length} ${prototypeState.compareProductIds.length === 1 ? "аромат" : "аромата"}</strong></span><strong>⇄ ›</strong></span></button>` : ""}
   ${prototypeState.recentlyViewedProductIds.length ? `<div class="section-head"><h2>Недавно смотрели</h2><span>${prototypeState.recentlyViewedProductIds.length}</span></div><div class="mini-product-row">${prototypeState.recentlyViewedProductIds.map(productById).map((item) => `<button class="mini-product" data-screen="product" data-product-id="${item.id}"><img src="${item.image}" alt="${item.name}" referrerpolicy="no-referrer" /><h3>${item.name}</h3><strong>${rub(item.price)}</strong></button>`).join("")}</div>` : ""}
-  <div class="section-head"><h2>Популярное</h2><span>${catalogConnection === "live" ? `${liveProductCount} из Битрикс24` : catalogConnection === "loading" ? "Обновляем каталог…" : "Демо-каталог"}</span></div>
-  <div class="product-grid">${products.map(productCard).join("")}</div>
+  <div class="section-head"><h2>Ещё ароматы</h2><span>${Math.max(products.length - 4, 0)}</span></div>
+  <div class="product-grid">${products.slice(4).map(productCard).join("")}</div>
+  <div class="section-head"><h2>Персонально для вас</h2><span>Предложения</span></div>
+  ${cartItemCount() && !prototypeState.cartRecoveryDismissed ? `<div class="card recovery-card"><div class="row between" style="align-items:flex-start"><button data-screen="cart" data-action="recover-cart" style="flex:1;border:0;background:transparent;color:inherit;text-align:left;padding:0"><p class="eyebrow" style="color:#81d8d0">Сохранили для вас</p><h2 style="margin-bottom:6px">В корзине ${cartItemCount()} ${cartItemCount() === 1 ? "аромат" : "аромата"}</h2><p class="subtle" style="margin:0">Продолжить оформление · ${rub(cartGoodsMinor())} →</p></button><button class="chip" data-action="dismiss-cart-recovery" style="color:#fff;border-color:#81d8d0">Скрыть</button></div></div>` : ""}
+  <button class="card" data-screen="offers" style="width:100%;text-align:left;margin-bottom:12px;border-color:#9fd9d3;background:#effafa"><div class="row between"><div><p class="eyebrow">Только для вас</p><h3>Скидка 15% и бесплатная доставка</h3><p class="subtle" style="margin:0">Активируйте предложения перед заказом</p></div><strong>›</strong></div></button>
+  <button class="card promo-strip" data-action="reorder"><div class="row between"><div><p class="eyebrow" style="color:#81d8d0">Повторить покупку</p><h3>${productById((prototypeState.lastOrder || defaultState.lastOrder)[0]?.id).name}</h3><p class="subtle" style="color:#cfe7e4;margin:0">Соберём прежнюю корзину в один клик</p></div><strong>›</strong></div></button>
   ${bottomNav("catalog")}
 </section>`;
 
@@ -982,8 +988,9 @@ const product = () => { const item = selectedProduct(); const volumes = productV
   <div class="product-hero"><button class="back-btn" data-action="back">‹</button><button class="share-btn" data-screen="product-share" aria-label="Поделиться ароматом">↗</button><button class="heart" data-action="favorite" data-product-id="${item.id}">${isFavorite(item.id) ? "♥" : "♡"}</button><img class="product-hero-image" src="${productImageForVolume(item, volume)}" alt="${item.name}, ${volume} мл" referrerpolicy="no-referrer" /></div>
   <p class="eyebrow">PdParizz · ${item.category}</p><div class="row between" style="align-items:flex-start"><h1>${item.name}</h1><strong>${rub(price)}</strong></div>
   <p class="subtle">Парфюмерная вода · ${volume} мл · <s>${rub(volumeOldPrice(item, volume))}</s></p><button class="rating" data-action="open-reviews" style="border:0;background:transparent;padding:0">★★★★★ <span class="subtle">4,9 · 127 отзывов ›</span></button>
-  <p class="stock-line">● ${available === false ? `Объём ${volume} мл сейчас недоступен` : stock > 0 ? `Осталось ${stock} шт. · ${volume} мл` : item.source === "bitrix24" ? `Доступность ${volume} мл подтверждена Битрикс24` : "В наличии · отправим сегодня"}</p><button class="card" data-action="watch-product" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:10px;${isPriceWatched(item.id) ? "border-color:#81d8d0;background:#fff8f8" : ""}"><span class="row between"><span><strong>${isPriceWatched(item.id) ? "Отслеживаем цену" : "Сообщить о снижении цены"}</strong><span class="subtle" style="display:block;margin-top:4px">${isPriceWatched(item.id) ? "Уведомление появится в приложении" : "Сохраним аромат и вернём вас к покупке"}</span></span><span>${isPriceWatched(item.id) ? "✓" : "+"}</span></span></button><button class="card" data-action="compare-toggle" data-product-id="${item.id}" style="width:100%;text-align:left;margin-bottom:18px;${isCompared(item.id) ? "border-color:#d6b56d;background:#fffaf0" : ""}"><span class="row between"><span><strong>${isCompared(item.id) ? "Добавлен к сравнению" : "Сравнить с другим ароматом"}</strong><span class="subtle" style="display:block;margin-top:4px">${isCompared(item.id) ? `${prototypeState.compareProductIds.length} из 3 выбрано · нажмите, чтобы убрать` : "Цена, ноты и характер рядом"}</span></span><span>⇄</span></span></button>
+  <p class="stock-line">● ${available === false ? `Объём ${volume} мл сейчас недоступен` : stock > 0 ? `Осталось ${stock} шт. · ${volume} мл` : item.source === "bitrix24" ? `В наличии · ${volume} мл` : "В наличии · отправим сегодня"}</p>
   <h3>Выберите объём</h3><div class="volume-grid">${volumes.map((value) => { const option = productVariant(item, value); const optionAvailable = option?.available ?? item.available; return `<button class="volume-option ${volume === value ? "selected" : ""}" data-action="volume" data-volume="${value}" ${optionAvailable === false ? "disabled" : ""}><strong>${value} мл</strong><small>${optionAvailable === false ? "Нет в наличии" : rub(volumePrice(item,value))}</small></button>`; }).join("")}</div>
+  <div class="product-secondary-actions"><button data-action="watch-product" data-product-id="${item.id}">${isPriceWatched(item.id) ? "✓ Цена отслеживается" : "+ Следить за ценой"}</button><button data-action="compare-toggle" data-product-id="${item.id}">${isCompared(item.id) ? "✓ В сравнении" : "⇄ Сравнить"}</button></div>
   <div class="row between"><h3 style="margin:0">Количество</h3><div class="quantity" style="margin:0"><button data-action="product-decrease" aria-label="Уменьшить количество">−</button><strong>${quantity}</strong><button data-action="product-increase" aria-label="Увеличить количество">+</button></div></div>
   <div class="notes">${item.notes.map((note, index) => `<div class="note"><b>${note}</b><span>${["верхние ноты", "сердце", "база"][index]}</span></div>`).join("")}</div>
   <h3>Характер аромата</h3><p class="subtle">${item.description}</p>
