@@ -463,8 +463,8 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.40 Tiffany cart variants";
-const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=catalog&v=43-cart-variants";
+const APP_VERSION = "MVP 0.40.1 Tiffany cart variants";
+const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=catalog&v=44-cart-images";
 const CATALOG_API_URL = "https://pdparizz-bitrix24-gateway.pdparizz-mobile.workers.dev/api/catalog/products";
 const ALLOWED_VOLUMES = [6, 15, 30];
 const normalizeVolume = (value, fallback = 15) => ALLOWED_VOLUMES.includes(Number(value)) ? Number(value) : fallback;
@@ -561,7 +561,7 @@ async function loadLiveCatalog() {
     }).filter(Boolean);
     if (!externalId || !Number.isInteger(amountMinor) || amountMinor < 0 || !image) return null;
     const siteVariants = siteVariantsFor(name);
-    const baseSixVariant = { id: `${externalId}-6`, volumeMl: 6, price: amountMinor, image, available: row.available !== false, stock: Number.isFinite(Number(row.stock)) ? Number(row.stock) : null };
+    const baseSixVariant = { id: `${externalId}-6`, volumeMl: 6, price: amountMinor, image: metadata?.image || siteVariants.find((variant) => variant.volumeMl === 15)?.image || image, available: row.available !== false, stock: Number.isFinite(Number(row.stock)) ? Number(row.stock) : null };
     const variants = ALLOWED_VOLUMES.map((volumeMl) => apiVariants.find((variant) => variant.volumeMl === volumeMl) || (volumeMl === 6 ? baseSixVariant : siteVariants.find((variant) => variant.volumeMl === volumeMl))).filter(Boolean);
     const defaultVariant = variants.find((variant) => variant.volumeMl === 15);
     if (!defaultVariant || variants.length !== ALLOWED_VOLUMES.length) return null;
