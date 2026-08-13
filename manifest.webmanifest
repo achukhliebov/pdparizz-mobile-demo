@@ -3,7 +3,7 @@
   "short_name": "PdParizz",
   "description": "Каталог ароматов, заказы и программа лояльности PdParizz.",
   "lang": "ru",
-  "start_url": "./?source=installed",
+  "start_url": "./?screen=catalog&source=installed",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4fbfa",
