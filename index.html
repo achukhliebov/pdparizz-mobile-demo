@@ -245,6 +245,18 @@ h3 { margin-bottom: 5px; font-size: 15px; }
 .auth-benefit b { width:25px; height:25px; border-radius:50%; display:grid; place-items:center; background:#fff; flex:none; }
 .auth-secondary { width:100%; margin-top:10px; padding:12px; border:0; background:transparent; color:var(--tiffany-deep); font-weight:750; }
 .install-logo { width: 92px; height: 92px; border-radius: 24px; background: var(--rose); color: #fff; display: grid; place-items: center; font: 52px Georgia, serif; box-shadow: 0 14px 30px rgba(165,84,97,.24); }
+.beta-hero { position: relative; overflow: hidden; padding: 22px; border: 0; color: #fff; background: linear-gradient(145deg,#102a28,#167f78); }
+.beta-hero::after { content:"P"; position:absolute; right:-8px; bottom:-48px; color:rgba(255,255,255,.08); font:156px Georgia,serif; }
+.beta-hero > * { position: relative; z-index: 1; }
+.beta-badge { display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border-radius:99px; color:#102a28; background:var(--tiffany); font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+.beta-actions { display:grid; gap:10px; margin-top:18px; }
+.beta-actions a { min-height:52px; border-radius:16px; display:flex; align-items:center; justify-content:center; text-decoration:none; font-weight:800; }
+.beta-actions .ios-action { color:#102a28; background:#fff; }
+.beta-actions .android-action { color:#fff; border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.08); }
+.beta-platform { display:grid; grid-template-columns:42px 1fr auto; gap:12px; align-items:center; width:100%; border:1px solid var(--line); border-radius:16px; padding:13px; background:var(--surface); text-align:left; }
+.beta-platform + .beta-platform { margin-top:10px; }
+.beta-platform-icon { width:42px; height:42px; border-radius:13px; display:grid; place-items:center; background:var(--tiffany-soft); color:var(--tiffany-deep); font-weight:900; }
+.beta-note { margin-top:16px; padding:13px 14px; border-radius:15px; color:var(--muted); background:#eef8f6; font-size:11px; line-height:1.5; }
 .install-step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 13px 0; border-bottom: 1px solid var(--line); }
 .install-step:last-child { border-bottom: 0; }
 .step-number { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--rose-soft); color: var(--rose); font-weight: 800; font-size: 12px; }
@@ -448,7 +460,7 @@ body.audit-mode .phone { width: 390px; height: 844px; border: 0; border-radius: 
     </main>
     <script type="module">
 const scenarios = [
-  ["demo-hub", "Демо-центр"], ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
+  ["beta", "Beta-центр"], ["demo-hub", "Демо-центр"], ["onboarding", "Onboarding"], ["quiz", "Подбор"], ["quiz-result", "Результат подбора"], ["reviews", "Отзывы"],
   ["auth-phone", "Вход · телефон"], ["auth-code", "Вход · код"],
   ["catalog", "Каталог"], ["catalog-search", "Поиск"], ["catalog-filters", "Фильтры"], ["catalog-results", "Результаты фильтров"], ["product", "Карточка"], ["product-share", "Поделиться товаром"], ["compare", "Сравнение"], ["cart", "Корзина"],
   ["cart-empty", "Пустая корзина"], ["favorites", "Избранное"], ["favorites-empty", "Избранное · empty"],
@@ -463,8 +475,9 @@ const scenarios = [
 ];
 
 const params = new URLSearchParams(location.search);
-const APP_VERSION = "MVP 0.40.1 Tiffany cart variants";
-const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?screen=catalog&v=44-cart-images";
+const APP_VERSION = "MVP 0.41.0 Partner Beta";
+const PUBLIC_DEMO_URL = "https://achukhliebov.github.io/pdparizz-mobile-demo/?v=45-partner-beta";
+const ANDROID_BUILD_URL = "https://github.com/achukhliebov/pdparizz-mobile/actions/runs/31687677083/artifacts/9176280949";
 const CATALOG_API_URL = "https://pdparizz-bitrix24-gateway.pdparizz-mobile.workers.dev/api/catalog/products";
 const ALLOWED_VOLUMES = [6, 15, 30];
 const normalizeVolume = (value, fallback = 15) => ALLOWED_VOLUMES.includes(Number(value)) ? Number(value) : fallback;
@@ -474,7 +487,7 @@ const cartLineParts = (key, legacyVolumes = {}) => {
   if (separator > 0) return { id: key.slice(0, separator), volume: normalizeVolume(key.slice(separator + 2)) };
   return { id: key, volume: normalizeVolume(legacyVolumes[key]) };
 };
-let screen = params.get("screen") || "catalog";
+let screen = params.get("screen") || "beta";
 if (params.get("audit") === "1") document.body.classList.add("audit-mode");
 
 const fallbackProducts = [
@@ -977,6 +990,8 @@ const productCard = (item) => `<article class="product-card ${item.available ===
   <div class="product-meta"><h3>${item.name}</h3><p>${item.category}</p><p class="card-volume">6 · 15 · 30 мл</p><p class="availability ${item.available === false ? "unavailable" : ""}">${item.available === false ? "Нет в наличии" : "В наличии"}</p><div class="price"><small>Диапазон цен</small><strong>${productPriceRange(item)}</strong></div></div>
 </article>`;
 
+const beta = () => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz для партнёров</p><h1>Beta-центр</h1></div><span class="status">13.08.2026</span></div><div class="card beta-hero"><span class="beta-badge">● Partner beta</span><h2 style="font-size:31px;margin:18px 0 9px">Приложение уже можно показать</h2><p style="margin:0;color:#d6eeeb;font-size:13px;line-height:1.5">Одна ссылка для iPhone и Android. Каталог, корзина, заказ, лояльность и поддержка работают в демонстрационном режиме.</p><div class="beta-actions"><a class="ios-action" href="?screen=demo-hub&v=45-partner-beta">Открыть на iPhone</a><a class="android-action" href="${ANDROID_BUILD_URL}" target="_blank" rel="noopener">Скачать для Android</a></div></div><div class="section-head"><h2>Что показать</h2><span>${APP_VERSION}</span></div><button class="beta-platform" data-action="start-demo-flow" data-flow="purchase"><span class="beta-platform-icon">1</span><span><strong>Покупка</strong><small class="subtle" style="display:block;margin-top:3px">6, 15 и 30 мл → корзина → заказ</small></span><strong>›</strong></button><button class="beta-platform" data-action="start-demo-flow" data-flow="order"><span class="beta-platform-icon">2</span><span><strong>Заказ и поддержка</strong><small class="subtle" style="display:block;margin-top:3px">Статус, повтор покупки и обращение</small></span><strong>›</strong></button><button class="beta-platform" data-action="start-demo-flow" data-flow="loyalty"><span class="beta-platform-icon">3</span><span><strong>Возврат клиента</strong><small class="subtle" style="display:block;margin-top:3px">Баллы, клуб и колесо подарков</small></span><strong>›</strong></button><div class="section-head"><h2>Установка</h2></div><div class="card"><div class="install-step"><span class="step-number">i</span><div><h3>iPhone</h3><p class="subtle" style="margin:0">Откройте в Safari → «Поделиться» → «На экран Домой».</p></div></div><div class="install-step"><span class="step-number">A</span><div><h3>Android</h3><p class="subtle" style="margin:0">Откройте сборку, скачайте APK и разрешите установку из браузера.</p></div></div></div><div class="beta-note"><strong>Важно для показа:</strong> SMS-код — <strong>0000</strong>. Оплата, отправка SMS и доставка сейчас демонстрационные: деньги не списываются, реальный заказ перевозчику не уходит.</div><button class="chip" data-action="copy-demo-link" style="width:100%;margin-top:14px">Скопировать ссылку для партнёров</button></section>`;
+
 const demoHub = () => {
   const flows = [
     ["purchase", "◇", "Покупка за 60 секунд", "Товар → корзина → оформление → оплата"],
@@ -1222,7 +1237,7 @@ const offline = () => `<section class="screen">${catalog().replace('<section cla
 const catalogLoading = () => `<section class="screen"><div class="topline"><div><div class="skeleton line" style="width:80px"></div><div class="skeleton line" style="width:220px;height:30px"></div></div></div><div class="skeleton line" style="height:48px"></div><div class="chips"><div class="skeleton line" style="width:60px;height:34px"></div><div class="skeleton line" style="width:80px;height:34px"></div></div><div class="product-grid"><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div><div class="skeleton tile"></div></div>${bottomNav("catalog")}</section>`;
 const stateScreen = (kind) => `<section class="screen"><div class="topline"><div><p class="eyebrow">PdParizz</p><h1>Каталог</h1></div></div><div class="state-panel"><div><div class="state-icon">${kind === "empty" ? "⌕" : "!"}</div><h2>${kind === "empty" ? "Ничего не нашли" : "Не удалось загрузить"}</h2><p class="subtle">${kind === "empty" ? "Попробуйте изменить запрос или фильтры." : "Проверьте соединение и попробуйте ещё раз."}</p><button class="primary" style="padding:0 28px;width:auto">${kind === "empty" ? "Сбросить фильтры" : "Повторить"}</button></div></div>${bottomNav("catalog")}</section>`;
 
-const renderers = { "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, "catalog-filters": catalogFilters, "catalog-results": catalogResults, product, "product-share": productShare, compare, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, watchlist, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
+const renderers = { beta, "demo-hub": demoHub, onboarding, quiz, "quiz-result": quizResult, catalog, "catalog-search": catalogSearch, "catalog-filters": catalogFilters, "catalog-results": catalogResults, product, "product-share": productShare, compare, reviews, cart, favorites, offers, checkout, pickup, "order-success": orderSuccess, orders, order, "order-cancel": orderCancel, support, loyalty, "loyalty-rules": loyaltyRules, profile, addresses, notifications, watchlist, "push-demo": pushDemo, attribution, referral, "referral-landing": referralLanding, "referral-rules": referralRules, "referral-success": referralSuccess, subscription, "subscription-checkout": subscriptionCheckout, "subscription-processing": subscriptionProcessing, "subscription-success": subscriptionSuccess, "subscription-cancel": subscriptionCancel, wheel, "wheel-rules": wheelRules, install, analytics, "data-sync": dataSync, privacy, offline, "wheel-result": wheelResult, "notifications-empty": notificationsEmpty, "cart-empty": cartEmpty, "favorites-empty": favoritesEmpty, "auth-phone": authPhone, "auth-code": authCode, "profile-edit": profileEdit, "payment-processing": paymentProcessing, "payment-error": paymentError, "order-delivered": orderDelivered, "catalog-loading": catalogLoading, "catalog-empty": () => stateScreen("empty"), "catalog-error": () => stateScreen("error") };
 
 const app = document.querySelector("#app");
 const scenarioLabel = document.querySelector("#scenario-label");
